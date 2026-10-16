@@ -13,11 +13,11 @@ ok()   { echo -e "${GREEN}✅ $*${NC}"; }
 warn() { echo -e "${YELLOW}⚠️  $*${NC}"; }
 fail() { echo -e "${RED}❌ $*${NC}"; exit 1; }
 
-# Detect Python
-for py in /usr/local/bin/python3.11 /usr/local/bin/python3.12 python3.11 python3.12 python3; do
-    if command -v "$py" &>/dev/null; then PYTHON="$py"; break; fi
-done
-[ -z "$PYTHON" ] && fail "Python 3.10+ not found"
+cd "$(dirname "$0")"
+
+# Use the project venv created by ./setup.sh
+PYTHON="./.venv/bin/python"
+[ -x "$PYTHON" ] || fail "No .venv found — run ./setup.sh first"
 
 # Detect Ollama
 for b in "/Applications/Ollama.app/Contents/Resources/ollama" ollama /usr/local/bin/ollama; do
@@ -41,9 +41,6 @@ if ! "$OLLAMA_BIN" list 2>/dev/null | grep -q "nomic-embed-text"; then
 fi
 ok "nomic-embed-text ready"
 
-# Init DB dir
-mkdir -p ./.vectorai_db
-
 # Start FastAPI backend
 echo ""
 ok "Starting CodeLens backend on http://localhost:8000"
@@ -52,4 +49,4 @@ echo "   POST /query  — semantic search"
 echo "   GET  /status — chunk count + watcher status"
 echo "   GET  /health — ollama + db health"
 echo ""
-exec "$PYTHON" -m uvicorn backend.main:app --host 127.0.0.1 --port 8000 --reload
+exec "$PYTHON" -m uvicorn backend.main:app --host 127.0.0.1 --port 8000

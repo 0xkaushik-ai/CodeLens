@@ -22,7 +22,7 @@ echo "  ██║     ██║   ██║██║  ██║██╔══�
 echo "  ╚██████╗╚██████╔╝██████╔╝███████╗███████╗███████╗██║ ╚████║███████║"
 echo "   ╚═════╝ ╚═════╝ ╚═════╝ ╚══════╝╚══════╝╚══════╝╚═╝  ╚═══╝╚══════╝"
 echo ""
-echo "  Offline Semantic Codebase Search • Powered by Actian VectorAI DB"
+echo "  Offline Semantic Codebase Search • SQLite + sqlite-vec + Ollama"
 echo ""
 
 # ────────────────────────────────────────────────────────────
@@ -105,32 +105,12 @@ ok "nomic-embed-text ready"
 # ────────────────────────────────────────────────────────────
 # 4. Python dependencies
 # ────────────────────────────────────────────────────────────
-echo "▶ Installing Python dependencies..."
-"$PYTHON" -m pip install --quiet --upgrade pip
-"$PYTHON" -m pip install --quiet \
-    "fastapi>=0.110.0" \
-    "uvicorn[standard]>=0.29.0" \
-    "pydantic>=2.6.4" \
-    "ollama>=0.5.0" \
-    "tree-sitter>=0.22.0" \
-    tree-sitter-python \
-    tree-sitter-typescript \
-    tree-sitter-javascript \
-    tree-sitter-go \
-    tree-sitter-rust \
-    tree-sitter-java \
-    "watchdog>=4.0.0" \
-    "rich>=13.7.1" \
-    "numpy>=1.26.0" \
-    "python-dotenv>=1.0.1"
+echo "▶ Creating .venv and installing the backend..."
+cd "$(dirname "$0")"
+"$PYTHON" -m venv .venv || fail "Could not create a virtualenv with $PYTHON"
+./.venv/bin/python -m pip install --quiet --upgrade pip
+./.venv/bin/python -m pip install --quiet -e ".[dev]"
 ok "Python dependencies installed"
-
-# ────────────────────────────────────────────────────────────
-# 5. VectorAI DB directory
-# ────────────────────────────────────────────────────────────
-echo "▶ Initialising local VectorAI DB..."
-mkdir -p ./.vectorai_db
-ok "VectorAI DB directory ready at ./.vectorai_db"
 
 # ────────────────────────────────────────────────────────────
 # 6. VS Code extension (optional — skip if npm missing)
@@ -153,7 +133,7 @@ ok "  CodeLens is ready!"
 echo "  ════════════════════════════════════════════════════════"
 echo ""
 echo "  Start the backend:"
-echo "    $PYTHON -m uvicorn backend.main:app --host 127.0.0.1 --port 8000"
+echo "    ./start.sh"
 echo ""
 echo "  Index a repo:"
 echo "    curl -X POST http://localhost:8000/index \\"
