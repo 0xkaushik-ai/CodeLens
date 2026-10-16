@@ -13,3 +13,8 @@ last_repo.json
 *.vsix
 node_modules/
 dist/
+.venv/
+.codelens/
+*.egg-info/
+.pytest_cache/
+scripts/demo_video/out/

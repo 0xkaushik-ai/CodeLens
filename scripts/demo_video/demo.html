@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #0a0c10;
+    --ui: -apple-system, "SF Pro Text", "Helvetica Neue", sans-serif;
+    --mono: "SF Mono", Menlo, monospace;
+    --accent: #4daafc;
+    --green: #3fb950; --amber: #d29922; --red: #f85149;
+    --side: #181818; --editor: #1f1f1f; --border: #2b2b2b; --fg: #cccccc; --dim: #8b8b8b;
+    --input: #313131; --badge: #4d4d4d; --mark: #7a4a1d; --code-bg: #262626;
+  }
+  html, body { width: 1920px; height: 1080px; overflow: hidden; background: var(--bg); color: #fff; font-family: var(--ui); }
+  #bg { position: absolute; inset: 0; background: radial-gradient(1200px 700px at 50% -10%, #17324d 0%, var(--bg) 60%) no-repeat; }
+
+  /* ---------- headline ---------- */
+  #headline { position: absolute; top: 56px; left: 0; right: 0; text-align: center; }
+  #headline h1 { font-size: 58px; font-weight: 700; letter-spacing: -0.02em; }
+  #headline p { font-size: 26px; color: #9fb3c8; margin-top: 10px; }
+
+  /* ---------- window ---------- */
+  #win {
+    position: absolute; left: 140px; top: 210px; width: 1640px; height: 830px;
+    border-radius: 14px; overflow: hidden; background: var(--editor);
+    box-shadow: 0 40px 120px rgba(0,0,0,.6), 0 0 0 1px #333;
+    display: grid; grid-template-rows: 40px 1fr 30px;
+  }
+  .titlebar { background: #1b1b1b; display: flex; align-items: center; padding: 0 16px; gap: 8px; border-bottom: 1px solid var(--border); }
+  .dot { width: 13px; height: 13px; border-radius: 50%; }
+  .titlebar .title { flex: 1; text-align: center; color: var(--dim); font-size: 14px; margin-right: 60px; }
+  .main { display: grid; grid-template-columns: 56px 610px 1fr; min-height: 0; overflow: hidden; }
+  .main > * { min-height: 0; }
+  .activity { background: #181818; border-right: 1px solid var(--border); display: flex; flex-direction: column; align-items: center; padding-top: 14px; gap: 22px; }
+  .activity .ico { width: 26px; height: 26px; border: 2px solid #5a5a5a; border-radius: 6px; }
+  .activity .ico.active { border-color: #fff; position: relative; }
+  .activity .ico.active::before { content: ''; position: absolute; left: -17px; top: -6px; bottom: -6px; width: 3px; background: var(--accent); }
+  .statusbar { background: #0e639c; color: #fff; font-size: 13px; display: flex; align-items: center; gap: 22px; padding: 0 14px; }
+  .statusbar .right { margin-left: auto; }
+
+  /* ---------- sidebar (mirrors extension/media/panel.html) ---------- */
+  .sidebar { background: var(--side); border-right: 1px solid var(--border); padding: 18px 20px; overflow: hidden; font-size: 15px; color: var(--fg); position: relative; }
+  .side-title { font-size: 12px; letter-spacing: .08em; color: var(--dim); margin-bottom: 14px; }
+  .header { display: flex; justify-content: space-between; align-items: center; font-size: 14px; color: var(--dim); margin-bottom: 14px; }
+  .header-left { display: flex; gap: 8px; align-items: center; }
+  .header-left strong { color: var(--fg); }
+  .status-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--green); }
+  .link { color: var(--accent); font-size: 14px; }
+  .search-input { width: 100%; background: var(--input); border: 1px solid #0078d4; color: #eee; border-radius: 5px; padding: 11px 13px; font-size: 18px; height: 46px; white-space: pre; overflow: hidden; }
+  .caret { display: inline-block; width: 2px; height: 22px; background: #fff; vertical-align: -4px; margin-left: 1px; }
+  .placeholder { color: #777; }
+  .controls { display: flex; justify-content: space-between; align-items: center; margin: 11px 0 12px; font-size: 14px; color: var(--dim); }
+  .btn { background: #0078d4; color: #fff; border-radius: 4px; padding: 5px 12px; font-size: 14px; }
+  .chk { display: inline-block; width: 15px; height: 15px; border: 1px solid #666; border-radius: 3px; vertical-align: -2px; margin-right: 6px; }
+  .filters { display: flex; gap: 6px; margin-bottom: 10px; min-height: 0; }
+  .pill { font-family: var(--mono); font-size: 13px; padding: 2px 9px; border-radius: 10px; background: #0e4f86; color: #e6f2ff; }
+  .meta { font-size: 13px; color: var(--dim); display: flex; justify-content: space-between; margin-bottom: 10px; }
+  kbd { font-family: var(--mono); font-size: 11px; border: 1px solid #444; border-radius: 3px; padding: 0 4px; margin-left: 2px; }
+  .cards { display: flex; flex-direction: column; gap: 12px; }
+  .card { background: var(--editor); border: 1px solid var(--border); border-radius: 7px; padding: 12px 13px; display: flex; flex-direction: column; gap: 7px; }
+  .card.selected { border-color: #0078d4; box-shadow: 0 0 0 1px #0078d4; }
+  .card-header { display: flex; justify-content: space-between; font-size: 13px; }
+  .filename { font-family: var(--mono); }
+  .filename .dir { color: var(--dim); }
+  .filename .base { color: #e5c07b; }
+  .lines { color: var(--dim); }
+  .symbol-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+  .symbol { color: #c586c0; font-weight: 600; font-family: var(--mono); font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tags { display: flex; gap: 6px; align-items: center; font-size: 12px; color: var(--dim); flex-shrink: 0; }
+  .tag { border: 1px solid #444; border-radius: 9px; padding: 0 7px; }
+  .tag.both { border-color: var(--green); color: #b6e3bf; }
+  .track { width: 38px; height: 5px; background: #3a3a3a; border-radius: 3px; overflow: hidden; }
+  .fill { height: 100%; }
+  .code { background: var(--code-bg); border-radius: 5px; padding: 8px 10px; font-family: var(--mono); font-size: 13px; line-height: 1.45; white-space: pre; overflow: hidden; max-height: calc(13px * 1.45 * 5 + 16px); color: #d4d4d4; }
+  mark { background: var(--mark); color: inherit; border-radius: 2px; }
+  .tk-k { color: #569cd6; } .tk-s { color: #ce9178; } .tk-n { color: #b5cea8; } .tk-c { color: #6a9955; font-style: italic; }
+  .tk-f { color: #dcdcaa; }
+
+  .empty { font-size: 14px; color: var(--dim); }
+  .empty h4 { font-size: 12px; letter-spacing: .08em; margin: 6px 0 8px; }
+  .chip { background: #3a3d41; color: #ddd; border-radius: 11px; padding: 8px 12px; margin-bottom: 8px; font-size: 14px; }
+  .syntax { font-size: 13px; width: 100%; border-collapse: collapse; }
+  .syntax td { padding: 3px 0; }
+  .syntax code { font-family: var(--mono); color: #ddd; }
+
+  /* ---------- editor ---------- */
+  .editor { display: grid; grid-template-rows: 38px 1fr; min-width: 0; background: var(--editor); }
+  .tabs { background: #181818; display: flex; border-bottom: 1px solid var(--border); }
+  .tab { padding: 10px 18px; font-size: 14px; color: var(--dim); border-right: 1px solid var(--border); white-space: nowrap; }
+  .tab.active { background: var(--editor); color: #fff; border-top: 2px solid var(--accent); padding-top: 8px; }
+  .code-view { position: relative; overflow: hidden; font-family: var(--mono); font-size: 15px; line-height: 25px; padding-top: 10px; }
+  .code-line { display: flex; white-space: pre; position: relative; }
+  .code-line .ln { width: 64px; text-align: right; padding-right: 22px; color: #6e7681; flex-shrink: 0; }
+  .code-line.flash { background: rgba(38, 79, 120, var(--flash, 0)); }
+  .code-line.cursor .ln { color: #ddd; }
+  .welcome { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #555; gap: 14px; }
+  .welcome .big { font-size: 64px; font-weight: 700; color: #333; letter-spacing: -0.03em; font-family: var(--ui); }
+  .welcome .small { font-family: var(--ui); font-size: 17px; }
+
+  /* ---------- key press bubble ---------- */
+  #key { position: absolute; padding: 10px 18px; border-radius: 10px; background: rgba(255,255,255,.95); color: #111; font: 600 26px var(--ui); box-shadow: 0 10px 30px rgba(0,0,0,.4); opacity: 0; }
+
+  /* ---------- intro / outro ---------- */
+  .card-screen { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
+  .logo { font-size: 128px; font-weight: 800; letter-spacing: -0.04em; }
+  .logo span { color: var(--accent); }
+  .tagline { font-size: 40px; color: #c9d6e3; margin-top: 18px; font-weight: 500; }
+  .sub { font-size: 26px; color: #7f93a8; margin-top: 18px; letter-spacing: .02em; }
+  .stats { display: grid; grid-template-columns: repeat(4, 340px); gap: 26px; margin-top: 10px; }
+  .stat { background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.08); border-radius: 18px; padding: 30px 20px; }
+  .stat b { display: block; font-size: 62px; letter-spacing: -0.03em; color: #fff; }
+  .stat span { font-size: 21px; color: #9fb3c8; }
+  .stack { margin-top: 48px; font-size: 25px; color: #9fb3c8; font-family: var(--mono); }
+  .repo { margin-top: 28px; font-size: 30px; color: var(--accent); font-weight: 600; }
+</style>
+</head>
+<body>
+  <div id="bg"></div>
+  <div id="headline"><h1></h1><p></p></div>
+
+  <div id="win">
+    <div class="titlebar">
+      <div class="dot" style="background:#ff5f57"></div><div class="dot" style="background:#febc2e"></div><div class="dot" style="background:#28c840"></div>
+      <div class="title">codelens — Visual Studio Code</div>
+    </div>
+    <div class="main">
+      <div class="activity"><div class="ico"></div><div class="ico active"></div><div class="ico"></div><div class="ico"></div></div>
+      <div class="sidebar">
+        <div class="side-title">CODELENS: SEMANTIC SEARCH</div>
+        <div class="header">
+          <div class="header-left"><span class="status-dot"></span><strong>CodeLens</strong><span id="badge"></span></div>
+          <span class="link">Re-index</span>
+        </div>
+        <div class="search-input" id="input"></div>
+        <div class="controls"><span><span class="chk"></span>Explain</span><span class="btn">Search ↵</span></div>
+        <div class="filters" id="filters"></div>
+        <div class="meta" id="meta"></div>
+        <div id="results"></div>
+      </div>
+      <div class="editor">
+        <div class="tabs" id="tabs"></div>
+        <div class="code-view" id="code"></div>
+      </div>
+    </div>
+    <div class="statusbar">
+      <span>⎇ main</span><span id="status-chunks">$(database) CodeLens</span>
+      <span class="right">● offline · local Ollama · sqlite-vec</span>
+    </div>
+  </div>
+
+  <div id="key"></div>
+
+  <div id="intro" class="card-screen">
+    <div class="logo">Code<span>Lens</span></div>
+    <div class="tagline">Search your codebase by meaning, or by name.</div>
+    <div class="sub">A VS Code extension · 100% offline · no API keys</div>
+  </div>
+
+  <div id="outro" class="card-screen">
+    <div class="logo" style="font-size:84px">Code<span>Lens</span></div>
+    <div class="tagline" style="margin:14px 0 46px">Your code never leaves your laptop.</div>
+    <div class="stats" id="stats"></div>
+    <div class="stack">SQLite · FTS5 · sqlite-vec · tree-sitter · Ollama</div>
+    <div class="repo">github.com/TryingtobeingNikhil/CodeLens</div>
+  </div>
+
+<script>
+const DATA = /*DATA*/null;
+const FPS = 30, DURATION = 30;
+
+// ------------------------------------------------------------------ helpers
+const $ = (id) => document.getElementById(id);
+const clamp = (x, a = 0, b = 1) => Math.max(a, Math.min(b, x));
+const easeOut = (x) => 1 - Math.pow(1 - clamp(x), 3);
+const ramp = (t, a, b) => easeOut((t - a) / (b - a));         // 0 → 1 between a and b
+const pulse = (t, a, b, fade = 0.35) => Math.min(ramp(t, a, a + fade), 1 - ramp(t, b - fade, b));
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+const KEYWORDS = new Set(('function def class struct impl import from export if else elif for while return const let var await ' +
+  'async type interface public private protected static fn pub new self this try except catch finally raise throw with ' +
+  'None null true false True False in not and or').split(' '));
+const HASH = new Set(['python', 'yaml', 'toml', 'text']);
+function splitIdent(w) {
+  return w.replace(/\$/g, '_').split('_').flatMap(p => p.match(/[A-Z]+(?=[A-Z][a-z])|[A-Z]?[a-z]+|[A-Z]+|\d+/g) || []).map(s => s.toLowerCase());
+}
+function highlight(code, lang, terms = []) {
+  const termSet = new Set(terms.filter(t => t.length >= 2));
+  const re = new RegExp((HASH.has(lang) ? '#[^\\n]*|' : '') +
+    '\\/\\/[^\\n]*|\\/\\*[\\s\\S]*?\\*\\/|"""[\\s\\S]*?"""|"(?:\\\\.|[^"\\\\\\n])*"|\'(?:\\\\.|[^\'\\\\\\n])*\'|`(?:\\\\.|[^`\\\\])*`|\\b\\d+(?:\\.\\d+)?\\b|[A-Za-z_$][\\w$]*', 'g');
+  let out = '', last = 0, m;
+  while ((m = re.exec(code)) !== null) {
+    out += esc(code.slice(last, m.index));
+    const tok = m[0], c = tok[0];
+    let h;
+    if (tok.startsWith('//') || tok.startsWith('/*') || (c === '#' && HASH.has(lang))) h = `<span class="tk-c">${esc(tok)}</span>`;
+    else if (c === '"' || c === "'" || c === '`') h = `<span class="tk-s">${esc(tok)}</span>`;
+    else if (/\d/.test(c)) h = `<span class="tk-n">${esc(tok)}</span>`;
+    else {
+      const next = code[m.index + tok.length];
+      h = KEYWORDS.has(tok) ? `<span class="tk-k">${esc(tok)}</span>` : next === '(' ? `<span class="tk-f">${esc(tok)}</span>` : esc(tok);
+      if (termSet.size && (termSet.has(tok.toLowerCase()) || splitIdent(tok).some(p => termSet.has(p)))) h = `<mark>${h}</mark>`;
+    }
+    out += h; last = m.index + tok.length;
+  }
+  return out + esc(code.slice(last));
+}
+const scoreColor = v => v > 0.75 ? 'var(--green)' : v > 0.55 ? 'var(--amber)' : 'var(--red)';
+
+// ------------------------------------------------------------------ script
+// Per-character typing times with a little deterministic rhythm
+function typingPlan(text, start, cps = 13) {
+  const times = [];
+  let t = start;
+  for (let i = 0; i < text.length; i++) {
+    const jitter = ((i * 7919) % 13) / 13;            // 0..1, deterministic
+    t += (1 / cps) * (0.7 + 0.6 * jitter) + (text[i] === ' ' ? 0.05 : 0);
+    times.push(t);
+  }
+  return times;
+}
+
+const Q = DATA.queries;
+const SCENES = [
+  { key: 'semantic', from: 3.0, to: 13.2, typeAt: 3.9, cps: 14,
+    title: 'Ask in plain English', sub: 'Semantic search finds code by what it does',
+    downAt: 8.4, enterAt: 9.2, open: 'extension/src/searchPanel.ts' },
+  { key: 'filters', from: 13.2, to: 20.2, typeAt: 13.6, cps: 15,
+    title: 'Narrow it down with filters', sub: 'in:  -in:  lang:  kind:  — results update as you type' },
+  { key: 'exact', from: 20.2, to: 25.0, typeAt: 20.5, cps: 11,
+    title: 'Or just type the name', sub: 'Keyword search merged with meaning: exact names always win',
+    downAt: 22.6, enterAt: 23.2, open: 'backend/query.py' },
+];
+for (const s of SCENES) {
+  s.query = Q[s.key].query;
+  s.times = typingPlan(s.query, s.typeAt, s.cps);
+  s.typedEnd = s.times[s.times.length - 1];
+  // A live search fires once a step's text is typed (plus the 250 ms debounce)
+  s.steps = Object.entries(Q[s.key].steps).map(([text, res]) => {
+    const idx = text.length - 1;
+    return { text, res, at: (s.times[idx] ?? s.typedEnd) + 0.3 };
+  }).sort((a, b) => a.at - b.at);
+}
+
+function sceneAt(t) { return SCENES.find(s => t >= s.from && t < s.to) || null; }
+
+// ------------------------------------------------------------------ rendering (cached per state)
+let lastResultsKey = null, lastEditorKey = null, lastFiltersKey = null;
+
+function renderInput(scene, t) {
+  const el = $('input');
+  if (!scene) { el.innerHTML = '<span class="placeholder">Ask anything, or type a symbol name</span>'; return; }
+  const n = scene.times.filter(x => x <= t).length;
+  const text = scene.query.slice(0, n);
+  const caretOn = n < scene.query.length || Math.floor(t * 2) % 2 === 0;
+  el.innerHTML = text ? esc(text) + (caretOn ? '<span class="caret"></span>' : '')
+                      : '<span class="caret"></span><span class="placeholder"> Ask anything, or type a symbol name</span>';
+}
+
+function emptyState() {
+  return `<div class="empty">
+    <h4>TRY</h4>
+    <div class="chip">where do we handle authentication?</div>
+    <div class="chip">database writes -in:tests</div>
+    <h4 style="margin-top:14px">FILTERS</h4>
+    <table class="syntax">
+      <tr><td><code>in:api</code></td><td>inside a folder or file</td></tr>
+      <tr><td><code>-in:tests</code></td><td>exclude a folder</td></tr>
+      <tr><td><code>lang:py</code></td><td>py, ts, js, go, rs, java, cpp</td></tr>
+      <tr><td><code>kind:class</code></td><td>function, method, class, type</td></tr>
+    </table></div>`;
+}
+
+function cardHtml(r, terms, selected) {
+  const slash = r.file_path.lastIndexOf('/');
+  const dir = slash >= 0 ? r.file_path.slice(0, slash + 1) : '';
+  const base = r.file_path.slice(slash + 1);
+  const code = r.chunk_text.split('\n').slice(0, 5).join('\n');
+  const bar = r.score == null ? '' : `<div class="track"><div class="fill" style="width:${Math.round(r.score * 100)}%;background:${scoreColor(r.score)}"></div></div>${r.score.toFixed(2)}`;
+  return `<div class="card ${selected ? 'selected' : ''}">
+    <div class="card-header"><span class="filename"><span class="dir">${esc(dir)}</span><span class="base">${esc(base)}</span></span>
+      <span class="lines">${r.line_start}–${r.line_end}</span></div>
+    <div class="symbol-row"><span class="symbol">${esc(r.symbol_name)}</span>
+      <span class="tags"><span class="tag">${esc(r.kind)}</span><span class="tag ${r.match === 'both' ? 'both' : ''}">${esc(r.match)}</span>${bar}</span></div>
+    <div class="code">${highlight(code, r.language, terms)}</div></div>`;
+}
+
+function renderResults(scene, t) {
+  let step = null;
+  if (scene) for (const s of scene.steps) if (s.at <= t) step = s;
+  const selected = scene && scene.downAt && t >= scene.downAt ? 0 : -1;
+  const key = step ? `${scene.key}|${step.text}|${selected}` : 'empty';
+  if (key !== lastResultsKey) {
+    lastResultsKey = key;
+    if (!step) {
+      $('results').innerHTML = emptyState();
+      $('meta').innerHTML = '';
+    } else {
+      const res = step.res;
+      $('meta').innerHTML = `<span>${res.results.length} results · ${res.query_ms}ms</span><span><kbd>↑</kbd><kbd>↓</kbd> <kbd>↵</kbd> open</span>`;
+      $('results').innerHTML = `<div class="cards">${res.results.slice(0, 4).map((r, i) => cardHtml(r, res.terms || [], i === selected)).join('')}</div>`;
+      $('results').dataset.since = step.at;
+    }
+  }
+  // brief fade when results change
+  const since = Number($('results').dataset.since || 0);
+  $('results').style.opacity = step ? 0.55 + 0.45 * ramp(t, since, since + 0.18) : 1;
+
+  const f = step ? step.res.filters : null;
+  const pills = [];
+  if (f) {
+    (f.in || []).forEach(v => pills.push('in:' + v));
+    (f.not_in || []).forEach(v => pills.push('-in:' + v));
+    if ((f.lang || []).length) pills.push('lang:' + f.lang.join('|'));
+    if ((f.kind || []).length) pills.push('kind:' + f.kind.join('|'));
+  }
+  const fk = pills.join(',');
+  if (fk !== lastFiltersKey) {
+    lastFiltersKey = fk;
+    $('filters').innerHTML = pills.map(p => `<span class="pill">${esc(p)}</span>`).join('');
+    $('filters').style.marginBottom = pills.length ? '10px' : '0';
+  }
+}
+
+function openFileAt(t) {
+  let open = null;
+  for (const s of SCENES) if (s.open && t >= s.enterAt) open = s;
+  return open;
+}
+
+function renderEditor(t) {
+  const scene = openFileAt(t);
+  const key = scene ? scene.open : 'welcome';
+  const target = scene ? Q[scene.key].steps[Q[scene.key].query].results[0] : null;
+  if (key !== lastEditorKey) {
+    lastEditorKey = key;
+    const tabs = ['extension/src/extension.ts'];
+    if (scene) tabs.push(scene.open);
+    $('tabs').innerHTML = tabs.map(p => `<div class="tab ${p === key ? 'active' : ''}">${esc(p.split('/').pop())}</div>`).join('') ;
+    if (!scene) {
+      $('tabs').innerHTML = '';
+      $('code').innerHTML = '<div class="welcome"><div class="big">CodeLens</div><div class="small">Search with the sidebar. Results open here.</div></div>';
+    } else {
+      const lang = scene.open.endsWith('.py') ? 'python' : 'typescript';
+      const lines = DATA.files[scene.open].split('\n');
+      const first = Math.max(0, target.line_start - 6);
+      const html = [];
+      for (let i = first; i < Math.min(lines.length, first + 30); i++) {
+        const inRange = i + 1 >= target.line_start && i + 1 <= Math.min(target.line_end, target.line_start + 22);
+        html.push(`<div class="code-line ${inRange ? 'flash' : ''} ${i + 1 === target.line_start ? 'cursor' : ''}"><span class="ln">${i + 1}</span><span>${highlight(lines[i], lang) || ' '}</span></div>`);
+      }
+      $('code').innerHTML = html.join('');
+    }
+  }
+  if (scene) {
+    // highlight flash like the extension's decoration: fades out after ~1.4 s
+    const flash = 0.95 * (1 - ramp(t, scene.enterAt + 0.8, scene.enterAt + 2.4));
+    $('code').style.setProperty('--flash', flash.toFixed(3));
+  }
+}
+
+function renderKey(t) {
+  const el = $('key');
+  let label = null, at = 0;
+  for (const s of SCENES) {
+    if (s.downAt && t >= s.downAt - 0.05 && t < s.downAt + 0.55) { label = '↓'; at = s.downAt; }
+    if (s.enterAt && t >= s.enterAt - 0.05 && t < s.enterAt + 0.7) { label = '↵ Enter'; at = s.enterAt; }
+  }
+  if (!label) { el.style.opacity = 0; return; }
+  el.textContent = label;
+  el.style.left = '600px';
+  el.style.top = '372px';
+  const k = ramp(t, at - 0.05, at + 0.1);
+  el.style.opacity = Math.min(k, 1 - ramp(t, at + 0.4, at + 0.65));
+  el.style.transform = `scale(${0.85 + 0.15 * k})`;
+}
+
+function renderHeadline(t) {
+  const scene = sceneAt(t);
+  const h = $('headline');
+  if (!scene) { h.style.opacity = 0; return; }
+  h.querySelector('h1').textContent = scene.title;
+  h.querySelector('p').textContent = scene.sub;
+  h.style.opacity = pulse(t, scene.from, scene.to, 0.35);
+  h.style.transform = `translateY(${(1 - ramp(t, scene.from, scene.from + 0.5)) * 14}px)`;
+}
+
+function renderStats() {
+  const idx = DATA.index;
+  const ms = Q.exact.steps[Q.exact.query].query_ms;
+  $('stats').innerHTML = [
+    ['100%', 'offline · no API keys'],
+    [`~${ms} ms`, 'per search'],
+    [`${(idx.duration_ms / 1000).toFixed(1)} s`, `to index ${idx.total_chunks} chunks`],
+    [`${DATA.reindex_ms} ms`, 're-index, nothing changed'],
+  ].map(([b, s]) => `<div class="stat"><b>${b}</b><span>${s}</span></div>`).join('');
+}
+
+window.renderAt = function (t) {
+  const scene = sceneAt(t);
+  // intro 0–3 s, window 3–25 s, outro 25–30 s
+  const intro = 1 - ramp(t, 2.4, 3.0);
+  $('intro').style.opacity = intro;
+  $('intro').style.transform = `scale(${1 + 0.04 * ramp(t, 0, 3)})`;
+
+  const winIn = ramp(t, 2.8, 3.5), winOut = ramp(t, 24.6, 25.3);
+  $('win').style.opacity = Math.min(winIn, 1 - winOut);
+  $('win').style.transform = `translateY(${(1 - winIn) * 40}px) scale(${1 - 0.04 * winOut})`;
+
+  $('outro').style.opacity = ramp(t, 25.1, 25.9);
+  $('outro').style.transform = `translateY(${(1 - ramp(t, 25.1, 26.0)) * 20}px)`;
+
+  $('badge').textContent = `${DATA.index.total_chunks} chunks`;
+  $('status-chunks').textContent = `CodeLens: ${DATA.index.total_chunks} chunks · watching`;
+
+  renderHeadline(t);
+  renderInput(scene, t);
+  renderResults(scene, t);
+  renderEditor(t);
+  renderKey(t);
+};
+
+renderStats();
+window.renderAt(0);
+</script>
+</body>
+</html>

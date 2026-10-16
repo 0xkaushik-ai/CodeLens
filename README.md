@@ -1,404 +1,258 @@
 <div align="center">
 
-<img src="https://img.shields.io/badge/CodeLens-Offline%20Semantic%20Search-6C63FF?style=for-the-badge&logo=visual-studio-code&logoColor=white" alt="CodeLens">
-
 # 🔍 CodeLens
 
-### *Natural-language search for your entire codebase — 100% offline, instant results*
+### *Search your codebase by meaning or by name. 100% offline.*
 
+[![CI](https://github.com/TryingtobeingNikhil/CodeLens/actions/workflows/ci.yml/badge.svg)](https://github.com/TryingtobeingNikhil/CodeLens/actions/workflows/ci.yml)
 [![Python](https://img.shields.io/badge/Python-3.10+-3776AB?style=flat-square&logo=python&logoColor=white)](https://python.org)
-[![FastAPI](https://img.shields.io/badge/FastAPI-0.110+-009688?style=flat-square&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.3+-3178C6?style=flat-square&logo=typescript&logoColor=white)](https://typescriptlang.org)
-[![VS Code](https://img.shields.io/badge/VS%20Code-Extension-007ACC?style=flat-square&logo=visual-studio-code&logoColor=white)](https://code.visualstudio.com)
-[![Actian VectorAI](https://img.shields.io/badge/Actian-VectorAI%20DB-EE3A43?style=flat-square&logo=databricks&logoColor=white)](https://www.actian.com)
+[![SQLite](https://img.shields.io/badge/SQLite-FTS5%20%2B%20sqlite--vec-003B57?style=flat-square&logo=sqlite&logoColor=white)](https://github.com/asg017/sqlite-vec)
 [![Ollama](https://img.shields.io/badge/Ollama-nomic--embed--text-FFA500?style=flat-square)](https://ollama.com)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=flat-square)](LICENSE)
-[![ARM Ready](https://img.shields.io/badge/ARM-Apple%20Silicon%20Ready-000000?style=flat-square&logo=apple&logoColor=white)](https://apple.com)
 
-**Type a question. Get the exact code. Jump to the line. No internet. No API keys. No compromise.**
+**Type a question or a symbol name. Get the exact function. Jump to the line. No internet, no API keys.**
 
-[Quick Start](#-one-command-setup) · [Architecture](#-architecture) · [Why VectorAI DB](#-why-actian-vectorai-db) · [Demo](#-demo)
+[Quick start](#-quick-start) · [How it works](#%EF%B8%8F-how-it-works) · [Search syntax](#-search-syntax) · [Numbers](#-measured-numbers) · [API](#-api)
 
 </div>
 
 ---
 
-## 🎯 The Problem
+## 🎯 The problem
 
-I join a large codebase. I know there's *some* function that handles JWT token refresh — but `Ctrl+F "token"` returns 847 matches. I spend 20 minutes hunting. **That's broken.**
+I join a large codebase. I know there's *some* function that refreshes JWT tokens, but `Ctrl+F "token"` returns 847 matches. I spend 20 minutes hunting. Keyword search matches *text*, not *intent*: it can't tell that **"where do sessions expire"** and `def invalidate_jwt_token()` are the same thing.
 
-Traditional code search is keyword-based. It matches *text*, not *intent*. It can't understand that **"find where user sessions expire"** and `def invalidate_jwt_token()` are the same concept.
+Pure semantic search has the opposite problem: ask for `parseConfig` by name and an embedding model may rank a vaguely similar function above it.
 
-**CodeLens fixes this.**
+**CodeLens does both.** Every query runs a semantic search and a keyword search, and fuses the two rankings.
+
+```
+Query: "where do we split camelCase identifiers"          (145 ms)
+
+1  backend/text.py:19            split_identifier       function  both  0.78
+2  backend/text.py:27            index_terms            function  both  0.69
+3  tests/test_query_parse.py:29  test_split_identifier  function  both  0.73
+
+Query: "embedding failures retry lang:py -in:tests"       (31 ms)
+
+1  backend/embedder.py:34        Embedder._embed              method  both  0.67
+2  backend/indexer.py:184        Indexer._embed_missing       method  both  0.65
+3  backend/db_client.py:261      CodeLensDB.put_embeddings    method  both  0.67
+```
+
+All of it runs locally. Turn the WiFi off; it still works.
 
 ---
 
-## ✨ What CodeLens Does
+## ✨ Features
 
-> Type any natural language question about your codebase. Get the exact functions, classes, and blocks that answer it — **ranked by semantic similarity**, with a one-click jump to the file and line.
-
-```
-Query: "where does the app handle database connection errors?"
-
-Result 1  backend/db.py  line 42–78   score 0.94  ████████████ ✓
-          def handle_db_exception(err: DatabaseError) → None
-
-Result 2  services/retry.py  line 12–34   score 0.87  ██████████   ✓
-          class ConnectionRetryPolicy
-
-Result 3  middleware/errors.py  line 89–102  score 0.79  █████████    ✓
-          async def global_error_handler(request, exc)
-
-→ [Jump to file] button opens the file at the exact line in VS Code
-```
-
-All of this runs **offline**. Close your WiFi. It still works.
+| | |
+|---|---|
+| **Hybrid search** | Semantic similarity (Ollama embeddings) and BM25 keyword search over symbol names, identifier sub-words, paths and code, merged with reciprocal-rank fusion. An exact symbol-name match always ranks first. |
+| **Search as you type** | Results update while you type. The last word is matched as a prefix; stale responses are dropped. |
+| **Filters** | `in:api -in:tests lang:py kind:function`, the same `key:value` style as [gyotaku](https://github.com/xevrion/gyotaku). An unfinished filter is ignored, not searched for, so results don't empty mid-keystroke. |
+| **Symbol-aware chunks** | tree-sitter splits code into functions, methods, classes and types (Python, TS/TSX, JS, Go, Rust, Java, C/C++), named like `Class.method`. Classes get a compact summary chunk; long functions are split into overlapping parts. |
+| **Incremental and live** | Only changed files are re-chunked; only new content is re-embedded. A function that moved keeps its vector and gets its new line numbers. A file watcher picks up saves, creates, renames and deletes, and respects `.gitignore`. |
+| **Degrades gracefully** | If Ollama is down, files are still indexed and keyword search keeps working; missing vectors are filled in on the next run. |
+| **Per-repo indexes** | Each workspace is indexed and searched separately in one local database. |
+| **VS Code native** | Sidebar search, keyboard navigation, jump-to-line with a highlight flash, "Find Similar Code" on a selection, status bar. |
 
 ---
 
-## 🏗️ Architecture
+## 🏗️ How it works
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                     LOCAL MACHINE — FULLY OFFLINE               │
-│                                                                  │
-│  ┌──────────────────────────────┐   ┌──────────────────────┐   │
-│  │      INDEXING PIPELINE       │   │   ACTIAN VECTORAI DB  │   │
-│  │   (runs once + on file save) │   │   (embedded, local)   │   │
-│  │                              │   │                       │   │
-│  │  📁 File Walker              │   │  • chunk_text         │   │
-│  │     .py .ts .go .rs .java   │──▶│  • file_path          │   │
-│  │         │                    │   │  • line_start/end     │   │
-│  │         ▼                    │   │  • symbol_name        │   │
-│  │  🌳 AST Chunker (tree-sitter)│   │  • language           │   │
-│  │     functions, classes,      │   │  • commit_sha         │   │
-│  │     methods, interfaces      │   │  • embedding (768d)   │   │
-│  │         │                    │   │                       │   │
-│  │         ▼                    │   └──────────┬────────────┘   │
-│  │  🤖 Ollama Embedder          │              │                 │
-│  │     nomic-embed-text (~270MB)│◀─────────────┘                │
-│  │     runs 100% offline        │              │                 │
-│  └──────────────────────────────┘              │                 │
-│                                                │ ANN search      │
-│  ┌──────────────────────────────┐              │ top-k results   │
-│  │      QUERY PIPELINE          │              │                 │
-│  │   (triggered by user)        │◀─────────────┘                │
-│  │                              │                               │
-│  │  💬 VS Code Sidebar          │   ┌──────────────────────┐   │
-│  │     natural language input   │   │  Local LLM (optional) │   │
-│  │         │                    │   │  Ollama + Mistral 7B  │   │
-│  │         ▼                    │──▶│  "Explain mode"       │   │
-│  │  🔢 Query Embedder           │   │  plain-English summary│   │
-│  │     same model as indexer    │   └──────────────────────┘   │
-│  │         │                    │                               │
-│  │         ▼                    │                               │
-│  │  📊 Result Renderer          │                               │
-│  │     snippets + file links    │                               │
-│  │     syntax highlighting      │                               │
-│  │     [Jump to file] button   │                               │
-│  └──────────────────────────────┘                               │
-└─────────────────────────────────────────────────────────────────┘
+                          ┌──────────────────────────── ~/.codelens/codelens.db (SQLite) ──┐
+ git ls-files             │                                                               │
+ (honours .gitignore)     │  files        path → content hash (incremental indexing)      │
+      │                   │  chunks       symbol, kind, language, lines, code             │
+      ▼                   │  chunks_fts   FTS5: symbol · identifier sub-words · path · code│
+ tree-sitter chunker ────▶│  embeddings   one float32 vector per distinct chunk content   │
+      │                   │  vec_*        sqlite-vec index over those vectors, per repo   │
+      ▼                   └───────────────────────────────────────────────────────────────┘
+ Ollama nomic-embed-text            ▲                                   ▲
+ (batched, 768-dim)  ───────────────┘                                   │
+                                                                        │
+ query ─▶ parse filters ─┬─▶ embed query ─▶ cosine top-k (sqlite-vec) ──┤
+                         └─▶ FTS5 BM25 top-k ───────────────────────────┤
+                                                                        ▼
+                                      reciprocal-rank fusion + exact-name boost
+                                      ─▶ collapse duplicates ─▶ VS Code sidebar
 ```
 
-### Two Pipelines, One Core
+### Why SQLite + FTS5 + sqlite-vec
 
-| Pipeline | Trigger | What it does |
-|---|---|---|
-| **Indexing** | Once on setup, then auto on file save | Walks repo → AST chunking → embed → store in VectorAI DB |
-| **Query** | Every user search | Embed query → ANN search VectorAI DB → render ranked results |
+Earlier versions described the store as "Actian VectorAI DB"; it was actually a SQLite table of vectors that was fully read from disk and scanned with numpy on every query. It is now a real hybrid index in one file:
+
+- **One transaction per file.** A file's chunks, its keyword index and its vectors change together, so the indexes never disagree, even if indexing is interrupted.
+- **Keyword and vector search in the same place**, filtered by the same SQL `WHERE` clause.
+- **[sqlite-vec](https://github.com/asg017/sqlite-vec)** does exact cosine search in C, partitioned by repo. When the Python build can't load SQLite extensions (python.org's macOS builds can't), CodeLens falls back to an in-memory numpy matrix that is rebuilt only when the index changes. Vectors are stored as plain BLOBs, so the sqlite-vec index is rebuilt automatically the next time a capable Python opens the file.
+- **Tiny and portable.** No server, no JVM, no cloud: `pip install sqlite-vec` is ~200 KB, and the whole index is one file you can delete or copy.
+
+Search is exact, not approximate: at codebase scale (thousands to low hundreds of thousands of chunks) a brute-force scan in C takes milliseconds, and an approximate index would only cost recall.
 
 ---
 
-## 🗄️ Why Actian VectorAI DB
+## 🚀 Quick start
 
-> *This is the core engine. Not a cloud service. Not a managed SaaS. A portable, embeddable, local vector database that runs on any machine.*
-
-This was the critical architectural decision. Here's the comparison we ran:
-
-| Feature | **Actian VectorAI DB** | Chroma | Pinecone |
-|---|:---:|:---:|:---:|
-| **Works offline** | ✅ Always | ✅ Local mode | ❌ Cloud-only |
-| **Zero config** | ✅ File-based | ⚠️ Needs server | ❌ API key + account |
-| **ARM native** | ✅ M1/M2/M3/Pi | ⚠️ Varies | ❌ N/A |
-| **Embedded** | ✅ In-process | ⚠️ Client-server | ❌ Remote |
-| **Low latency ANN** | ✅ Sub-10ms local | ⚠️ Variable | ⚠️ Network bound |
-| **Portable** | ✅ Copy the dir | ⚠️ Export needed | ❌ Locked to cloud |
-| **Privacy** | ✅ Never leaves disk | ✅ Local mode | ❌ Data leaves machine |
-| **Hackathon viable** | ✅ One command | ⚠️ More setup | ❌ Billing required |
-
-**The key insight**: Portability + embedded architecture + offline-first ANN search made VectorAI DB the *only* viable choice for a tool that must work on a developer's laptop with zero cloud dependency.
-
-When a developer runs `./setup.sh`, VectorAI DB initializes in `./.vectorai_db/`. It's a directory. You can copy it, back it up, and reproduce the exact index anywhere. That's not possible with any cloud vector database.
-
-### What VectorAI DB stores per chunk
-
-```python
-{
-    "symbol_name":    "handle_db_exception",   # function/class name
-    "chunk_text":     "def handle_db_exception...",  # full source
-    "file_path":      "backend/db.py",          # relative path
-    "line_start":     42,                        # for jump-to-file
-    "line_end":       78,
-    "language":       "python",                  # parsed by tree-sitter
-    "content_hash":   "a3f1c9d...",             # for dedup/incremental index
-    "embedding":      [0.021, -0.134, ...]       # 768-dim vector
-}
-```
-
----
-
-## 🌳 AST-Based Chunking (Not Line Splits)
-
-Most naive RAG systems split code every N lines. This produces garbage chunks that split functions in half, include imports in the middle of class bodies, and destroy semantic coherence.
-
-CodeLens uses **tree-sitter** to parse the actual AST of each file, then extracts *complete semantic units*:
-
-```
-Python   → function_definition, class_definition, decorated_definition
-TypeScript → function_declaration, method_definition, class_declaration, arrow_function
-Go       → function_declaration, method_declaration, type_declaration
-Rust     → function_item, impl_item, struct_item
-Java     → method_declaration, class_declaration, constructor_declaration
-```
-
-Each chunk is a **complete, meaningful code unit** — never half a function, never a fragment. This is why search results are actually useful.
-
-> **Fallback**: For files with no recognized AST nodes (config, markdown, etc.), CodeLens falls back to a 40-line sliding window with 10-line overlap.
-
----
-
-## 🚀 One-Command Setup
+Requirements: Python 3.10+, [Ollama](https://ollama.com), and Node 18+ for building the extension.
 
 ```bash
 git clone https://github.com/TryingtobeingNikhil/CodeLens.git
 cd CodeLens
-chmod +x setup.sh
-./setup.sh
+./setup.sh      # installs Ollama if needed, pulls nomic-embed-text, creates .venv, builds the extension
+./start.sh      # starts Ollama and the backend on http://127.0.0.1:8000
 ```
 
-That's it. The script:
-1. Checks for [Ollama](https://ollama.com) (installs prompt if missing)
-2. Starts the Ollama service
-3. Pulls `nomic-embed-text` (~270 MB, one-time)
-4. Installs all Python dependencies
-5. Initializes the local VectorAI DB instance
-6. Builds the VS Code extension
+In VS Code, press F5 to start the Extension Development Host, open a project, click the CodeLens icon, then **Re-index**. The extension reuses a backend that is already running, or starts one from its `.venv`.
 
-Then launch the backend:
+Index and search from a terminal:
+
 ```bash
-uvicorn backend.main:app --host 127.0.0.1 --port 8000
+curl -N -X POST localhost:8000/index -H 'Content-Type: application/json' -d "{\"repo_path\": \"$PWD\"}"
+curl -X POST localhost:8000/query -H 'Content-Type: application/json' \
+     -d "{\"query\": \"where do we retry failed requests -in:tests\", \"repo_path\": \"$PWD\"}"
 ```
+
+`curl` gets coloured terminal output; send `Accept: application/json` for JSON.
 
 ---
 
-## 📦 Tech Stack
+## 🔎 Search syntax
 
-| Layer | Technology | Purpose |
-|---|---|---|
-| **Vector Database** | Actian VectorAI DB | Embedded local ANN search - the core engine |
-| **Embedding Model** | `nomic-embed-text` via Ollama | 768-dim code embeddings, fully offline |
-| **Code Parsing** | `tree-sitter` (6 languages) | AST-based semantic chunking |
-| **API Server** | FastAPI + Uvicorn | `POST /index`, `POST /query`, `GET /status` |
-| **File Watching** | `watchdog` | Auto-reindex on file save |
-| **IDE Integration** | VS Code Extension (TypeScript) | Sidebar UI, jump-to-file, status bar |
-| **Optional LLM** | Mistral 7B via Ollama | "Explain mode" — plain English summaries |
-| **Progress UI** | `rich` | Beautiful CLI progress bars during indexing |
+Type plain words, a question, or a symbol name. Add filters anywhere:
 
----
-
-## 🔌 API Reference
-
-### `POST /index` — Index a repository
-```bash
-curl -X POST http://localhost:8000/index \
-  -H "Content-Type: application/json" \
-  -d '{"repo_path": "/path/to/your/repo", "force_reindex": false}'
-```
-Returns a **Server-Sent Events stream** with real-time progress:
-```json
-{"type": "progress", "file": "src/auth.py", "chunks": 12, "total_files": 847}
-{"type": "complete", "total_chunks": 9432, "duration_ms": 41200}
-```
-
-### `POST /query` — Semantic search
-```bash
-curl -X POST http://localhost:8000/query \
-  -H "Content-Type: application/json" \
-  -d '{"query": "where does JWT validation happen?", "top_k": 8, "explain": false}'
-```
-```json
-{
-  "results": [
-    {
-      "symbol_name": "validate_jwt_token",
-      "file_path": "auth/middleware.py",
-      "line_start": 34,
-      "line_end": 67,
-      "language": "python",
-      "score": 0.94,
-      "chunk_text": "def validate_jwt_token(token: str) -> User:..."
-    }
-  ],
-  "query_ms": 38,
-  "total_indexed": 9432
-}
-```
-
-### `GET /status` — Engine status
-```json
-{
-  "indexed_chunks": 9432,
-  "last_indexed": "2026-04-16T14:20:16Z",
-  "embed_model": "nomic-embed-text",
-  "watching": true
-}
-```
-
-### `GET /health` — Dependency health check
-```json
-{
-  "ollama": true,
-  "vectorai": true,
-  "ollama_error": null
-}
-```
-
----
-
-## 💡 VS Code Extension Features
-
-| Feature | Description |
+| Filter | Matches |
 |---|---|
-| **Semantic Search Sidebar** | Natural language input, ranked results with syntax highlighting |
-| **Jump to File** | Click any result → VS Code opens the file at the exact line |
-| **Live Re-indexing** | "Re-index" button triggers `POST /index` with SSE progress bar |
-| **Status Bar** | Shows `⬡ CodeLens: 9,432 chunks` — always visible |
-| **Offline Syntax Highlighting** | Built-in highlight.js stub — no CDN, no internet |
-| **Keyboard Navigation** | `↑↓` arrows navigate results, `Enter` to search, `Esc` to clear |
-| **AI Explain Mode** | Optional "Include AI explanation" checkbox → Mistral 7B summarizes results |
-| **Shimmer Loading** | Skeleton cards while waiting — feels production-quality |
-| **Example Queries** | Clickable chips on empty state to onboard new users instantly |
+| `in:<name>` | Paths with a folder or file starting with `<name>`, at any depth, ignoring case. `in:api`, `in:src/auth`, `in:"my dir"`. Several `in:` filters are ORed. |
+| `-in:<name>` | Excludes those paths. `-in:tests` |
+| `lang:<lang>` | `py`, `ts` (includes TSX), `tsx`, `js`, `go`, `rs`, `java`, `cpp`, `md`, `yaml`, `toml` |
+| `kind:<kind>` | `function`, `method`, `class`, `interface`, `type`, `struct`, `impl`, `module`, `text` (docs and config) |
 
----
+A query made only of filters, such as `kind:class in:models`, lists every matching chunk. Words with a colon that aren't one of these keys (`http://`, `12:30`) are searched as text.
 
-## 🔁 Incremental Indexing
+### Keys in the sidebar
 
-CodeLens uses MD5 content hashing to **skip unchanged chunks**. When the file watcher triggers on a save:
+| Key | Action |
+|---|---|
+| Type | Search as you type |
+| `↑` `↓` | Select a result |
+| `Enter` | Open the selected result, or search |
+| `Esc` | Clear the selection, then the query |
+| `Cmd/Ctrl+Alt+K` | Focus CodeLens search |
+| Shift+click **Re-index** | Rebuild the index from scratch |
 
-1. The modified file is re-parsed by tree-sitter
-2. New content hashes are generated for each chunk
-3. Only chunks with **new hashes** are embedded and upserted
-4. Deleted/modified functions are removed by `delete_by_filepath` before re-insert
+Commands: **CodeLens: Search**, **Find Similar Code** (editor context menu on a selection), **Re-index Workspace**, **Rebuild Index From Scratch**, **Restart Backend**, **Show Logs**.
 
-This means **re-indexing a large codebase after a single file edit takes milliseconds**, not minutes.
+### Settings
 
----
-
-## 🍎 ARM Native (Apple Silicon + Raspberry Pi)
-
-CodeLens was designed and tested on **Apple Silicon (M-series)** from day one. The entire stack:
-- `nomic-embed-text` via Ollama — native ARM binary
-- Actian VectorAI DB — ARM-compatible embedded instance
-- FastAPI/Uvicorn — architecture-agnostic Python
-- VS Code extension — platform-agnostic TypeScript
-
-No Rosetta. No emulation. No performance penalty.
-
----
-
-## 🔒 Privacy by Design
-
-| What never leaves your machine |
-|---|
-| Your source code |
-| Your query text |
-| Your embeddings |
-| Your search history |
-
-There are no telemetry calls, no analytics pings, no cloud sync. The only network calls CodeLens makes are to `localhost:11434` (Ollama) and `localhost:8000` (its own backend).
-
----
-
-## 📁 Project Structure
-
-```
-CodeLens/
-├── backend/                    # Python FastAPI backend
-│   ├── __init__.py
-│   ├── config.py               # Environment-based settings
-│   ├── db_client.py            # Actian VectorAI DB wrapper
-│   ├── indexer.py              # File walker + AST chunker + embedder
-│   ├── main.py                 # FastAPI server (index/query/status/health)
-│   ├── query.py                # Query embedding + ANN search + explain mode
-│   └── tree_sitter_parser.py   # Multi-language AST parsing utilities
-│
-├── extension/                  # VS Code extension (TypeScript)
-│   ├── src/
-│   │   ├── extension.ts        # Extension entry, backend process spawner
-│   │   └── searchPanel.ts      # Webview provider, message handler
-│   └── media/
-│       └── panel.html          # Full sidebar UI (search, results, progress)
-│
-├── shared/                     # Shared type definitions
-├── setup.sh                    # ⭐ One-command full setup script
-├── docker-compose.yml          # Docker deployment option
-├── pyproject.toml              # Python dependency manifest
-├── package.json                # Extension manifest + VS Code contribution points
-├── tsconfig.json               # TypeScript compiler config
-└── .env.example                # Environment variable template
-```
-
----
-
-## 🎬 Demo
-
-> **The killer demo**: Turn off WiFi. Open VS Code. Type a question. Watch it work.
-
-Three queries that demonstrate semantic understanding (not keyword matching):
-
-| Query | What it finds | Why it's impressive |
+| Setting | Default | |
 |---|---|---|
-| `"where does the app validate user sessions?"` | `def validate_jwt_token()` in `auth/middleware.py` | "validate" ≠ "sessions" ≠ "jwt" — semantic match |
-| `"show me all database write operations"` | `INSERT`, `UPDATE`, `batch_upsert` across 6 files | Finds writes by *concept*, not by SQL keyword |
-| `"which functions handle error logging?"` | Logger calls across multiple modules | "handle" + "error" + "logging" as a concept, not words |
+| `codelens.pythonPath` | *(empty)* | Python for the backend. Empty: the backend folder's `.venv`, then `python3` |
+| `codelens.backendPath` | *(empty)* | Folder containing `backend/main.py`. Empty: the copy bundled in the extension |
+| `codelens.port` | `8000` | Backend port |
+| `codelens.autoStartBackend` | `true` | Start the backend unless one is already running |
+
+Backend environment variables (or `.env`): `CODELENS_DB_PATH` (default `~/.codelens`), `OLLAMA_HOST`, `EMBED_MODEL`, `EXPLAIN_MODEL` (default `mistral`), `MAX_FILE_BYTES` (default 512 KB), `EMBED_BATCH_SIZE`, `CODELENS_USE_SQLITE_VEC=0` to force the numpy backend.
+
+---
+
+## 📊 Measured numbers
+
+Measured on this repository (24 files) on an Apple Silicon Mac with `nomic-embed-text` in Ollama:
+
+| Metric | Result |
+|---|---|
+| First index (217 chunks, all embedded) | 9.3 s |
+| Re-index with nothing changed | 33 ms |
+| File saved → searchable | ~1–2 s (1 s debounce + embedding) |
+| Query, warm | 30–60 ms, most of it embedding the query |
+| Query with only filters | < 5 ms |
+| Index size | 4.6 MB |
+
+---
+
+## 🔌 API
+
+The backend only answers local requests: requests with a non-local `Host` header (DNS rebinding) or a browser `Origin` are rejected, and there is no CORS, so web pages you visit can't read your code through it.
+
+| Endpoint | |
+|---|---|
+| `POST /index` `{repo_path, force_reindex?}` | Server-sent events: `start`, `progress` (`phase: scan\|embed`, `done`, `total`, `file`), `error` (per file, non-fatal), `complete` (counts, `embed_error`, `duration_ms`). Starts watching the repo. `409` if that repo is already being indexed. |
+| `POST /query` `{query, repo_path?, top_k?, explain?, live?}` | `results` (file, lines, symbol, kind, language, code, `score` = cosine similarity or `null`, `match` = `both\|semantic\|keyword\|filter`), parsed `filters`, `terms`, `warnings`, `explain_text`, `query_ms`, `total_indexed` |
+| `GET /status?repo_path=` | Chunk, file and embedded counts, vector backend, indexing and watching state, known repos |
+| `GET /health` | Ollama reachability, whether the embedding model is pulled, database state |
+
+---
+
+## 🔒 Privacy
+
+Everything runs on your machine: no telemetry, no accounts, no network access except to your local Ollama. The index lives in `~/.codelens/` and can be deleted at any time. Files ignored by git, files over 512 KB, and minified or binary files are never indexed.
+
+---
+
+## 📁 Project structure
+
+```
+backend/
+  main.py               FastAPI app: /index (SSE), /query, /status, /health; repo registry; local-only guard
+  indexer.py            File listing (git-aware), incremental sync, batched embedding, debounced watcher
+  tree_sitter_parser.py Symbol-aware chunking for 8 languages, sliding windows for docs and config
+  db_client.py          SQLite schema, FTS5 and sqlite-vec indexes, numpy fallback
+  query.py              Filter parsing, hybrid search, rank fusion, explain mode
+  embedder.py           Batched Ollama embeddings with a query cache
+  text.py               Identifier splitting and FTS query building
+extension/
+  src/extension.ts      Backend discovery and lifecycle, commands, status bar
+  src/searchPanel.ts    Sidebar webview provider, jump-to-line, indexing progress
+  src/client.ts         HTTP/SSE client (Node's built-in fetch)
+  media/panel.html      Sidebar UI (strict CSP, all backend data escaped)
+shared/types.ts         API wire types
+tests/                  pytest suite (runs against both sqlite-vec and numpy backends)
+```
+
+---
+
+## 🧪 Development
+
+```bash
+python3 -m venv .venv && .venv/bin/pip install -e ".[dev]"
+.venv/bin/python -m pytest          # backend tests, no Ollama needed (a fake embedder is used)
+
+npm install
+npm run watch                       # then F5 in VS Code
+npm run package                     # builds codelens-<version>.vsix, backend included
+```
+
+CI runs the tests on Linux and macOS with Python 3.10 and 3.12, compiles the extension and uploads the `.vsix`.
 
 ---
 
 ## 🗺️ Roadmap
 
-- [ ] **Dead code detector** — embed all function signatures, flag those with zero similarity to the rest of the codebase
-- [ ] **Query history** — persisted locally, shown in sidebar with timestamps
-- [ ] **Multi-workspace support** — index and switch between multiple repos
-- [ ] **`.codelens` ignore file** — like `.gitignore` but for indexing
-- [ ] **Commit-aware indexing** — only re-embed chunks changed since last git commit
-- [ ] **Cross-file semantic linking** — show "functions that call this" / "functions called by this"
-
----
-
-## 🤝 Contributing
-
-```bash
-# Backend development
-pip install -e ".[dev]"
-uvicorn backend.main:app --reload
-
-# Extension development
-npm install
-npm run watch
-# F5 in VS Code to launch Extension Development Host
-```
+- [x] Hybrid keyword + semantic search with rank fusion
+- [x] `in:` / `lang:` / `kind:` filters
+- [x] Search as you type
+- [x] Incremental indexing that survives Ollama being offline
+- [x] Per-repo indexes, `.gitignore` support
+- [ ] Group near-duplicate results (copy-pasted code) into one card, with the rest a key away
+- [ ] A `codelens` CLI (`codelens search`, `codelens index`, `codelens stats`)
+- [ ] Index the most recently changed files first, so search is useful while a large repo indexes
+- [ ] Optional reranking of the top results with a small local cross-encoder
+- [ ] "Find usages by meaning": rank callers of the selected function
 
 ---
 
 ## 📄 License
 
-MIT — see [LICENSE](LICENSE)
+MIT. See [LICENSE](LICENSE).
 
 ---
 
 <div align="center">
 
-**Built For hackthon & I literally killed it. ** · April 2026
+**Built For hackthon & I literally killed it.** · April 2026
 
 *CodeLens is proof that developer tools don't need the cloud to be powerful.*
 
