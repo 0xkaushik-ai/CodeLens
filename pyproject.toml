@@ -1,26 +1,39 @@
 [project]
 name = "codelens-backend"
-version = "0.2.0"
-description = "Offline semantic codebase search powered by Actian VectorAI DB"
+version = "0.3.0"
+description = "Offline semantic + keyword codebase search (SQLite, FTS5, sqlite-vec, Ollama)"
+readme = "README.md"
+license = { text = "MIT" }
 requires-python = ">=3.10"
 dependencies = [
     "fastapi>=0.110.0",
     "uvicorn[standard]>=0.29.0",
     "pydantic>=2.6.4",
     "ollama>=0.5.0",
-    "tree-sitter>=0.22.0",
+    "tree-sitter>=0.22.0,<0.26",  # 0.26.0 segfaults while walking Python trees
     "tree-sitter-python",
     "tree-sitter-typescript",
     "tree-sitter-javascript",
     "tree-sitter-go",
     "tree-sitter-rust",
     "tree-sitter-java",
+    "tree-sitter-cpp",
+    "sqlite-vec>=0.1.6",
     "watchdog>=4.0.0",
     "rich>=13.7.1",
     "numpy>=1.26.0",
-    "python-dotenv>=1.0.1"
+    "python-dotenv>=1.0.1",
 ]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "httpx>=0.27"]
 
 [build-system]
 requires = ["setuptools>=68"]
-build-backend = "setuptools.backends.legacy:build"
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["backend"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
