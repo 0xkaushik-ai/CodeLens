@@ -2,614 +2,672 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <meta http-equiv="Content-Security-Policy"
+          content="default-src 'none'; style-src {{cspSource}} 'unsafe-inline'; script-src 'nonce-{{nonce}}';">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CodeLens Dashboard</title>
+    <title>CodeLens</title>
     <style>
         :root {
-            /* Semantic Variables Mapping Native Code Lens UI */
             --bar-green: #3fb950;
             --bar-amber: #d29922;
             --bar-red: #f85149;
-            --card-radius: 8px;
+            --card-radius: 6px;
         }
 
         body {
             font-family: var(--vscode-font-family);
             background-color: var(--vscode-sideBar-background);
-            color: var(--vscode-sideBarTitle-foreground);
-            padding: 16px;
+            color: var(--vscode-foreground);
+            padding: 12px;
             margin: 0;
             overflow-x: hidden;
-            overflow-y: auto;
         }
 
-        /* Top Structure Layer */
+        button { font-family: inherit; }
+
         .header {
             display: flex;
             align-items: center;
             justify-content: space-between;
             font-size: 11px;
-            font-weight: 500;
             color: var(--vscode-descriptionForeground);
-            margin-bottom: 20px;
-            border-bottom: 1px solid var(--vscode-panel-border);
-            padding-bottom: 10px;
+            margin-bottom: 12px;
+            gap: 8px;
         }
-        
-        .header-left {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-        }
+        .header-left { display: flex; align-items: center; gap: 6px; min-width: 0; }
+        .header-left span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
         .status-dot {
-            width: 8px;
-            height: 8px;
-            border-radius: 50%;
-            background-color: var(--bar-green);
+            width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+            background-color: var(--vscode-descriptionForeground);
         }
+        .status-dot.green { background-color: var(--bar-green); }
         .status-dot.amber { background-color: var(--bar-amber); }
         .status-dot.red { background-color: var(--bar-red); }
 
-        .reindex-btn {
+        .link-btn {
             background: transparent;
             color: var(--vscode-textLink-foreground);
             border: none;
             cursor: pointer;
             font-size: 11px;
+            padding: 0;
+            white-space: nowrap;
         }
-        .reindex-btn:hover {
-            color: var(--vscode-textLink-activeForeground);
-            text-decoration: underline;
-        }
+        .link-btn:hover { color: var(--vscode-textLink-activeForeground); text-decoration: underline; }
+        .link-btn:disabled { color: var(--vscode-disabledForeground); cursor: default; text-decoration: none; }
 
-        /* Primary Search Block Element */
-        .search-container {
-            margin-bottom: 24px;
-        }
-        
-        .search-input-wrapper {
-            position: relative;
-            margin-bottom: 8px;
-        }
-
-        /* Strictly Implemented CSS input requirement (0.15s ease) */
         .search-input {
             width: 100%;
             box-sizing: border-box;
             background-color: var(--vscode-input-background);
             color: var(--vscode-input-foreground);
-            border: 2px solid var(--vscode-input-border);
-            padding: 10px 14px;
-            border-radius: 6px;
+            border: 1px solid var(--vscode-input-border, transparent);
+            padding: 8px 10px;
+            border-radius: 4px;
             outline: none;
             font-family: var(--vscode-font-family);
             font-size: 13px;
-            transition: border-color 0.15s ease;
         }
-        
-        .search-input:focus {
-            border-color: var(--vscode-focusBorder);
-        }
+        .search-input:focus { border-color: var(--vscode-focusBorder); }
 
         .search-controls {
             display: flex;
             align-items: center;
             justify-content: space-between;
             font-size: 12px;
+            margin: 8px 0 12px;
         }
-        
         .checkbox-wrapper {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            color: var(--vscode-descriptionForeground);
-            cursor: pointer;
+            display: flex; align-items: center; gap: 6px;
+            color: var(--vscode-descriptionForeground); cursor: pointer;
         }
-
         .search-btn {
             background-color: var(--vscode-button-background);
             color: var(--vscode-button-foreground);
-            border: none;
-            border-radius: 4px;
-            padding: 4px 10px;
-            font-size: 12px;
-            font-weight: 500;
-            cursor: pointer;
+            border: none; border-radius: 4px;
+            padding: 4px 10px; font-size: 12px; cursor: pointer;
         }
-        
-        .search-btn:hover {
-            background-color: var(--vscode-button-hoverBackground);
+        .search-btn:hover { background-color: var(--vscode-button-hoverBackground); }
+
+        .filter-row { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 8px; }
+        .filter-pill {
+            font-size: 10px;
+            font-family: var(--vscode-editor-font-family);
+            padding: 1px 6px;
+            border-radius: 8px;
+            background: var(--vscode-badge-background);
+            color: var(--vscode-badge-foreground);
         }
 
         .metadata-row {
             font-size: 11px;
             color: var(--vscode-descriptionForeground);
-            margin-bottom: 12px;
+            margin-bottom: 8px;
             display: flex;
             justify-content: space-between;
-            border-bottom: 1px solid var(--vscode-panel-border);
-            padding-bottom: 8px;
         }
 
-        /* Response Render Containers */
-        #results-container {
-            display: flex;
-            flex-direction: column;
-            gap: 16px;
-            list-style: none;
-            padding: 0;
-            margin: 0;
+        .notice {
+            font-size: 12px;
+            padding: 8px 10px;
+            border-radius: var(--card-radius);
+            margin-bottom: 10px;
+            border-left: 3px solid var(--bar-amber);
+            background: var(--vscode-textBlockQuote-background);
         }
+        .notice.error { border-left-color: var(--bar-red); }
+        .notice button { margin-top: 6px; }
 
-        /* Core Result Card Specifications */
+        #results { display: flex; flex-direction: column; gap: 10px; list-style: none; padding: 0; margin: 0; }
+
         .result-card {
             background-color: var(--vscode-editor-background);
             border: 1px solid var(--vscode-panel-border);
             border-radius: var(--card-radius);
-            padding: 12px;
+            padding: 10px;
             display: flex;
             flex-direction: column;
-            gap: 8px;
-            opacity: 0;
-            transform: translateY(6px);
-            animation: staggerFadeIn 0.3s forwards ease-out;
+            gap: 6px;
+            cursor: pointer;
+            animation: fadeIn 0.15s ease-out;
         }
-        
-        @keyframes staggerFadeIn {
-            to { opacity: 1; transform: translateY(0); }
-        }
+        .result-card.selected { border-color: var(--vscode-focusBorder); }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 
-        .card-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: baseline;
-            font-size: 11px;
-        }
+        .card-header { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; font-size: 11px; }
+        .filename { font-family: var(--vscode-editor-font-family); word-break: break-all; }
+        .filename .dir { color: var(--vscode-descriptionForeground); }
+        .filename .base { color: var(--vscode-terminal-ansiYellow); }
+        .line-range { color: var(--vscode-descriptionForeground); white-space: nowrap; }
 
-        .filename {
-            color: var(--vscode-terminal-ansiYellow);
-            font-family: var(--vscode-editor-font-family);
-            word-break: break-all;
-        }
-        
-        .line-range {
-            color: var(--vscode-descriptionForeground);
-            white-space: nowrap;
-        }
-
-        .symbol-row {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 4px;
-        }
-
+        .symbol-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
         .symbol-name {
             color: var(--vscode-symbolIcon-functionForeground);
-            font-weight: bold;
+            font-weight: 600;
             font-family: var(--vscode-editor-font-family);
-            font-size: 13px;
-            max-width: 75%;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
+            font-size: 12px;
+            overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
         }
-
-        .score-wrap {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            font-size: 11px;
-            color: var(--vscode-descriptionForeground);
-        }
-
-        .score-track {
-            width: 40px;
-            height: 4px;
-            background-color: var(--vscode-scrollbarSlider-background);
-            border-radius: 2px;
-            overflow: hidden;
-        }
-
-        .score-fill {
-            height: 100%;
-            border-radius: 2px;
-            transition: width 0.4s ease;
-        }
-
-        .divider {
-            height: 1px;
-            margin: 4px 0;
-            border-top: 1px dashed var(--vscode-panel-border);
-        }
+        .tags { display: flex; align-items: center; gap: 6px; font-size: 10px; color: var(--vscode-descriptionForeground); flex-shrink: 0; }
+        .tag { border: 1px solid var(--vscode-panel-border); border-radius: 8px; padding: 0 5px; }
+        .tag.both { border-color: var(--bar-green); }
+        .score-track { width: 32px; height: 4px; background-color: var(--vscode-scrollbarSlider-background); border-radius: 2px; overflow: hidden; }
+        .score-fill { height: 100%; }
 
         .code-block {
             background-color: var(--vscode-textCodeBlock-background);
             font-family: var(--vscode-editor-font-family);
             font-size: 12px;
             line-height: 1.4;
-            padding: 8px;
+            padding: 6px 8px;
             border-radius: 4px;
             margin: 0;
-            max-height: calc(12px * 1.4 * 8); /* strictly bounds exactly to 8 max lines */
+            max-height: calc(12px * 1.4 * 8);
             overflow: hidden;
             color: var(--vscode-editor-foreground);
             white-space: pre-wrap;
             word-wrap: break-word;
         }
-
-        .card-actions {
-            display: flex;
-            justify-content: space-between;
-            margin-top: 4px;
+        .code-block mark {
+            background: var(--vscode-editor-findMatchHighlightBackground);
+            color: inherit;
+            border-radius: 2px;
         }
 
-        /* Using ghost style buttons natively defined via secondary variables */
+        .card-actions { display: flex; gap: 6px; }
         .ghost-btn {
             background-color: var(--vscode-button-secondaryBackground);
             color: var(--vscode-button-secondaryForeground);
-            border: none;
-            padding: 4px 10px;
-            border-radius: 4px;
-            font-size: 11px;
-            cursor: pointer;
+            border: none; padding: 3px 8px; border-radius: 4px; font-size: 11px; cursor: pointer;
         }
-        
-        .ghost-btn:hover {
-            background-color: var(--vscode-button-secondaryHoverBackground);
+        .ghost-btn:hover { background-color: var(--vscode-button-secondaryHoverBackground); }
+
+        .tok-keyword { color: var(--vscode-debugTokenExpression-name, #569CD6); }
+        .tok-string { color: var(--vscode-debugTokenExpression-string, #CE9178); }
+        .tok-number { color: var(--vscode-debugTokenExpression-number, #B5CEA8); }
+        .tok-comment { color: var(--vscode-descriptionForeground); font-style: italic; }
+
+        .ai-explanation {
+            border-left: 3px solid var(--vscode-focusBorder);
+            background: var(--vscode-textBlockQuote-background);
+            padding: 8px 10px;
+            border-radius: var(--card-radius);
+            margin-bottom: 10px;
+            font-size: 12px;
+            white-space: pre-wrap;
         }
 
-        /* Pure CSS Shimmer Skeleton State */
         .skeleton {
             background: var(--vscode-editor-background);
             border: 1px solid var(--vscode-panel-border);
             border-radius: var(--card-radius);
-            padding: 12px;
-            height: 120px;
-            position: relative;
-            overflow: hidden;
-        }
-        
-        .skeleton::after {
-            content: '';
-            position: absolute;
-            top: 0; right: 0; bottom: 0; left: 0;
-            background-image: linear-gradient(
-                90deg, 
-                transparent 0%, 
-                var(--vscode-panel-border) 50%, 
-                transparent 100%
-            );
-            animation: shimmer 1.5s infinite;
-            opacity: 0.2;
-            transform: skewX(-20deg);
+            height: 90px;
+            opacity: 0.5;
         }
 
-        @keyframes shimmer {
-            0% { transform: translateX(-100%); }
-            100% { transform: translateX(100%); }
-        }
-
-        /* Initial Chip Configuration Defaults */
-        .chips {
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-            margin-top: 16px;
-        }
-        
+        .empty { font-size: 12px; color: var(--vscode-descriptionForeground); }
+        .empty h4 { margin: 14px 0 6px; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; }
         .chip {
+            display: block;
+            width: 100%;
+            text-align: left;
             background-color: var(--vscode-badge-background);
             color: var(--vscode-badge-foreground);
-            padding: 8px 12px;
-            border-radius: 12px;
+            padding: 6px 10px;
+            border-radius: 10px;
             font-size: 12px;
             cursor: pointer;
             border: 1px solid transparent;
-            transition: all 0.2s;
+            margin-bottom: 6px;
         }
-        
-        .chip:hover {
-            border-color: var(--vscode-focusBorder);
+        .chip:hover { border-color: var(--vscode-focusBorder); }
+        .syntax { width: 100%; border-collapse: collapse; font-size: 11px; }
+        .syntax td { padding: 2px 0; vertical-align: top; }
+        .syntax code { font-family: var(--vscode-editor-font-family); white-space: nowrap; padding-right: 8px; }
+        kbd {
+            font-family: var(--vscode-editor-font-family);
+            font-size: 10px;
+            border: 1px solid var(--vscode-panel-border);
+            border-radius: 3px;
+            padding: 0 3px;
         }
 
-        /* Offline LLM Extracted Container Render Mapping */
-        .ai-explanation {
-            background-color: var(--vscode-notificationsInfoIcon-foreground);
-            color: var(--vscode-editor-background);
-            padding: 12px;
-            border-radius: var(--card-radius);
-            margin-bottom: 20px;
-            font-size: 13px;
-        }
-        
-        /* Fully Native Inline Polyfill Minimalistic Engine logic bridging multiple languages */
-        .hljs-keyword { color: #569CD6; font-weight: bold; }
-        .hljs-string { color: #CE9178; }
-        .hljs-number { color: #B5CEA8; }
-        .hljs-comment { color: #6A9955; font-style: italic; }
-        
         .hidden { display: none !important; }
-        
-        /* Progress View Interface Tracking (SSE Mode bounds) */
-        .progress-view {
-            text-align: center;
-            padding: 40px 0;
-        }
-        .progress-bar-container {
-            width: 100%;
-            height: 6px;
-            background: var(--vscode-progressBar-background);
-            border-radius: 3px;
-            overflow: hidden;
-            margin: 12px 0;
-        }
-        .progress-bar-fill {
-            height: 100%;
-            background: var(--vscode-button-background);
-            width: 0%;
-            transition: width 0.2s ease;
-        }
-        .progress-filename {
-            font-family: var(--vscode-editor-font-family);
-            font-size: 11px;
-            color: var(--vscode-terminal-ansiYellow);
-            margin-bottom: 8px;
-            min-height: 14px;
-            word-break: break-all;
-        }
+
+        .progress-view { padding: 16px 0; font-size: 11px; color: var(--vscode-descriptionForeground); }
+        .progress-bar-container { width: 100%; height: 4px; background: var(--vscode-scrollbarSlider-background); border-radius: 2px; overflow: hidden; margin: 8px 0; }
+        .progress-bar-fill { height: 100%; background: var(--vscode-progressBar-background); width: 0%; transition: width 0.2s ease; }
+        .progress-filename { font-family: var(--vscode-editor-font-family); color: var(--vscode-terminal-ansiYellow); word-break: break-all; min-height: 14px; }
     </style>
 </head>
 <body>
-
-    <!-- Application Action Header -->
     <div class="header">
         <div class="header-left">
-            <span class="status-dot tooltip" id="health-dot" title="Health Indicator"></span>
+            <span class="status-dot" id="health-dot" title="Checking backend..."></span>
             <strong>CodeLens</strong>
-            <span id="chunk-count-badge">0 chunks</span>
+            <span id="chunk-badge">connecting...</span>
         </div>
-        <button class="reindex-btn" id="btn-reindex">[⟳ Re-index]</button>
+        <button class="link-btn" id="btn-reindex" title="Index new and changed files">Re-index</button>
     </div>
 
-    <!-- Active Vector Embed Lookup Prompt -->
-    <div class="search-container">
-        <div class="search-input-wrapper">
-            <input type="text" id="query-input" class="search-input" placeholder="Ask anything about your codebase..." autocomplete="off">
-        </div>
-        <div class="search-controls">
-            <label class="checkbox-wrapper">
-                <input type="checkbox" id="chk-explain">
-                Include AI explanation
-            </label>
-            <button class="search-btn" id="btn-search">Search ↵</button>
-        </div>
+    <input type="text" id="query-input" class="search-input"
+           placeholder="Ask anything, or type a symbol name" autocomplete="off" spellcheck="false">
+    <div class="search-controls">
+        <label class="checkbox-wrapper" title="Summarise the top results with a local LLM">
+            <input type="checkbox" id="chk-explain"> Explain
+        </label>
+        <button class="search-btn" id="btn-search">Search ↵</button>
     </div>
 
-    <!-- Dynamic Context Render Wrappers -->
-    <div id="metadata-header" class="metadata-row hidden">
-        <span id="meta-results-txt">0 results · 0ms</span>
-    </div>
-    
-    <div id="explain-container"></div>
-    
-    <!-- Active Background Processing Queue Screen -->
-    <div id="progress-container" class="progress-view hidden">
-        <div class="progress-filename" id="prog-file">...</div>
-        <div class="progress-bar-container">
-            <div class="progress-bar-fill" id="prog-bar"></div>
-        </div>
-        <div style="font-size: 11px; color: var(--vscode-descriptionForeground);" id="prog-text">
-            Indexed <span id="prog-pct">0</span> / 100% · <span id="prog-chunks">0</span> chunks found
-        </div>
+    <div id="filter-row" class="filter-row hidden"></div>
+    <div id="notices"></div>
+
+    <div id="progress" class="progress-view hidden">
+        <div id="prog-phase">Reading files</div>
+        <div class="progress-bar-container"><div class="progress-bar-fill" id="prog-bar"></div></div>
+        <div class="progress-filename" id="prog-file"></div>
     </div>
 
-    <!-- Live ANN Evaluation Node Elements Return -->
-    <ul id="results-container">
-        <div class="chips" id="empty-state">
-            <div class="chip" data-query="where does auth validation happen?">where does auth validation happen?</div>
-            <div class="chip" data-query="show all database write operations">show all database write operations</div>
-            <div class="chip" data-query="which functions handle error logging?">which functions handle error logging?</div>
-        </div>
-    </ul>
+    <div id="meta" class="metadata-row hidden"><span id="meta-text"></span><span id="meta-hint"><kbd>↑</kbd><kbd>↓</kbd> <kbd>↵</kbd> open</span></div>
+    <div id="explain"></div>
+    <ul id="results"></ul>
 
-    <script>
+    <div id="empty" class="empty">
+        <h4>Try</h4>
+        <button class="chip" data-query="where do we handle authentication?">where do we handle authentication?</button>
+        <button class="chip" data-query="database writes -in:tests">database writes -in:tests</button>
+        <button class="chip" data-query="error logging kind:function">error logging kind:function</button>
+        <h4>Filters</h4>
+        <table class="syntax">
+            <tr><td><code>in:api</code></td><td>inside a folder or file starting with "api"</td></tr>
+            <tr><td><code>-in:tests</code></td><td>exclude a folder</td></tr>
+            <tr><td><code>lang:py</code></td><td>py, ts, js, go, rs, java, cpp, md</td></tr>
+            <tr><td><code>kind:class</code></td><td>function, method, class, type, interface, text</td></tr>
+        </table>
+        <h4>Keys</h4>
+        <table class="syntax">
+            <tr><td><code>↑ ↓</code></td><td>select a result</td></tr>
+            <tr><td><code>Enter</code></td><td>open it (or search)</td></tr>
+            <tr><td><code>Esc</code></td><td>clear selection, then the query</td></tr>
+        </table>
+    </div>
+
+    <script nonce="{{nonce}}">
+    (function () {
         const vscode = acquireVsCodeApi();
-        
-        const uiTokens = {
-            input: document.getElementById('query-input'),
-            btnSearch: document.getElementById('btn-search'),
-            btnReindex: document.getElementById('btn-reindex'),
-            chkExplain: document.getElementById('chk-explain'),
-            resultsCont: document.getElementById('results-container'),
-            metaRow: document.getElementById('metadata-header'),
-            metaTxt: document.getElementById('meta-results-txt'),
-            emptyState: document.getElementById('empty-state'),
-            chunkBadge: document.getElementById('chunk-count-badge'),
-            healthDot: document.getElementById('health-dot'),
-            explainCont: document.getElementById('explain-container'),
-            
-            progCont: document.getElementById('progress-container'),
-            progFile: document.getElementById('prog-file'),
-            progBar: document.getElementById('prog-bar'),
-            progPct: document.getElementById('prog-pct'),
-            progChunks: document.getElementById('prog-chunks')
-        };
-        
-        let navigationIndex = -1;
-        let resultElements = [];
-
-        // Inline lightweight custom minified stub executing high performance DOM render constraints matching user spec without fetching via Cloud CDN
-        const syntaxParser = {
-            highlight: (code) => {
-                return code
-                    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;") 
-                    .replace(/("(?:\\"|[^"])*"|'(?:\\'|[^'])*')/g, '<span class="hljs-string">$1</span>')
-                    .replace(/(\/\/.*|\/\*[\s\S]*?\*\/|#.*)/g, '<span class="hljs-comment">$1</span>')
-                    .replace(/\b(function|def|class|struct|impl|import|export|if|else|return|const|let|var|await|async|type|interface|public|private)\b/g, '<span class="hljs-keyword">$1</span>')
-                    .replace(/\b(\d+(?:\.\d+)?)\b/g, '<span class="hljs-number">$1</span>');
-            }
+        const $ = (id) => document.getElementById(id);
+        const ui = {
+            input: $('query-input'), btnSearch: $('btn-search'), btnReindex: $('btn-reindex'),
+            explain: $('chk-explain'), results: $('results'), meta: $('meta'), metaText: $('meta-text'),
+            empty: $('empty'), badge: $('chunk-badge'), dot: $('health-dot'), explainBox: $('explain'),
+            notices: $('notices'), filters: $('filter-row'),
+            progress: $('progress'), progPhase: $('prog-phase'), progBar: $('prog-bar'), progFile: $('prog-file'),
         };
 
-        function spawnShimmerLoaders() {
-            uiTokens.resultsCont.innerHTML = '';
-            uiTokens.emptyState?.classList.add('hidden');
-            for(let i = 0; i < 3; i++) {
-                uiTokens.resultsCont.innerHTML += `<div class="skeleton"></div>`;
-            }
+        const LIVE_DELAY_MS = 250;
+        let seq = 0;            // id of the latest query sent
+        let shownSeq = 0;       // id of the results on screen
+        let liveTimer = null;
+        let selected = -1;
+        let cards = [];
+        let lastResults = [];
+        let lastQuery = '';
+        let indexing = false;
+        let chunkCount = null;
+
+        // ---------------------------------------------------------------
+        // Rendering helpers: everything from the backend is escaped
+        // ---------------------------------------------------------------
+        const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) =>
+            ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+        const KEYWORDS = new Set(('function def class struct impl trait import from export if else elif for while ' +
+            'return const let var await async type interface public private protected static fn pub mod use ' +
+            'func package go defer match try except catch finally raise throw new self this lambda yield with ' +
+            'enum extends implements None null nil true false True False').split(' '));
+        const HASH_COMMENTS = new Set(['python', 'yaml', 'toml', 'text']);
+
+        function splitIdent(word) {
+            return (word.replace(/\$/g, '_').split('_').flatMap(p =>
+                p.match(/[A-Z]+(?=[A-Z][a-z])|[A-Z]?[a-z]+|[A-Z]+|\d+/g) || [])).map(s => s.toLowerCase());
         }
 
-        function execSearchWorkflow() {
-            const raw = uiTokens.input.value.trim();
-            if (!raw) return;
-            
-            spawnShimmerLoaders();
-            uiTokens.metaRow.classList.add('hidden');
-            uiTokens.explainCont.innerHTML = '';
-            
-            vscode.postMessage({
-                type: 'query',
-                text: raw,
-                explain: uiTokens.chkExplain.checked
+        /** One pass over the code: each token is escaped and classified exactly once. */
+        function highlight(code, language, terms) {
+            const termSet = new Set(terms.filter(t => t.length >= 2));
+            const comment = HASH_COMMENTS.has(language) ? '#[^\\n]*|' : '';
+            const re = new RegExp(comment +
+                '\\/\\/[^\\n]*|\\/\\*[\\s\\S]*?\\*\\/|"(?:\\\\.|[^"\\\\\\n])*"|\'(?:\\\\.|[^\'\\\\\\n])*\'|`(?:\\\\.|[^`\\\\])*`' +
+                '|\\b\\d+(?:\\.\\d+)?\\b|[A-Za-z_$][\\w$]*', 'g');
+            let out = '', last = 0, m;
+            while ((m = re.exec(code)) !== null) {
+                out += esc(code.slice(last, m.index));
+                const tok = m[0];
+                const first = tok[0];
+                let html;
+                if (tok.startsWith('//') || tok.startsWith('/*') || (comment && first === '#')) {
+                    html = `<span class="tok-comment">${esc(tok)}</span>`;
+                } else if (first === '"' || first === "'" || first === '`') {
+                    html = `<span class="tok-string">${esc(tok)}</span>`;
+                } else if (/\d/.test(first)) {
+                    html = `<span class="tok-number">${esc(tok)}</span>`;
+                } else {
+                    html = KEYWORDS.has(tok) ? `<span class="tok-keyword">${esc(tok)}</span>` : esc(tok);
+                    const lower = tok.toLowerCase();
+                    if (termSet.size && (termSet.has(lower) || splitIdent(tok).some(p => termSet.has(p)))) {
+                        html = `<mark>${html}</mark>`;
+                    }
+                }
+                out += html;
+                last = m.index + tok.length;
+            }
+            return out + esc(code.slice(last));
+        }
+
+        function scoreColor(v) {
+            if (v > 0.75) return 'var(--bar-green)';
+            if (v > 0.55) return 'var(--bar-amber)';
+            return 'var(--bar-red)';
+        }
+
+        function notice(text, cls = '', action) {
+            const div = document.createElement('div');
+            div.className = 'notice ' + cls;
+            div.textContent = text;
+            if (action) {
+                const btn = document.createElement('button');
+                btn.className = 'ghost-btn';
+                btn.textContent = action.label;
+                btn.addEventListener('click', action.run);
+                div.appendChild(document.createElement('br'));
+                div.appendChild(btn);
+            }
+            ui.notices.appendChild(div);
+        }
+
+        function showEmptyState(show) {
+            ui.empty.classList.toggle('hidden', !show);
+        }
+
+        function clearResults() {
+            ui.results.innerHTML = '';
+            ui.explainBox.innerHTML = '';
+            ui.meta.classList.add('hidden');
+            ui.filters.classList.add('hidden');
+            cards = [];
+            selected = -1;
+        }
+
+        function showSkeleton() {
+            if (cards.length) return;  // keep old results visible while typing
+            ui.results.innerHTML = '<div class="skeleton"></div><div class="skeleton"></div>';
+        }
+
+        function renderFilters(filters) {
+            const pills = [];
+            (filters.in || []).forEach(v => pills.push('in:' + v));
+            (filters.not_in || []).forEach(v => pills.push('-in:' + v));
+            if ((filters.lang || []).length) pills.push('lang:' + filters.lang.join('|'));
+            if ((filters.kind || []).length) pills.push('kind:' + filters.kind.join('|'));
+            ui.filters.innerHTML = pills.map(p => `<span class="filter-pill">${esc(p)}</span>`).join('');
+            ui.filters.classList.toggle('hidden', pills.length === 0);
+        }
+
+        function renderResults(msg) {
+            clearResults();
+            ui.notices.innerHTML = '';
+            lastResults = msg.results;
+            showEmptyState(false);
+            (msg.warnings || []).forEach(w => notice(w));
+            renderFilters(msg.filters || {});
+
+            if (msg.explain_text) {
+                const box = document.createElement('div');
+                box.className = 'ai-explanation';
+                box.textContent = msg.explain_text;   // plain text: model output is never HTML
+                ui.explainBox.appendChild(box);
+            }
+
+            ui.meta.classList.remove('hidden');
+            ui.metaText.textContent = `${msg.results.length} result${msg.results.length === 1 ? '' : 's'} · ${msg.query_ms}ms`;
+            if (msg.total_indexed !== undefined) setChunkCount(msg.total_indexed);
+
+            if (!msg.results.length) {
+                ui.results.innerHTML = chunkCount === 0
+                    ? '<div class="empty">This workspace is not indexed yet. Click Re-index.</div>'
+                    : '<div class="empty">No matches. Try other words or remove a filter.</div>';
+                return;
+            }
+
+            const terms = msg.terms || [];
+            msg.results.forEach((r, idx) => {
+                const li = document.createElement('li');
+                li.className = 'result-card';
+                const slash = r.file_path.lastIndexOf('/');
+                const dir = slash >= 0 ? r.file_path.slice(0, slash + 1) : '';
+                const base = r.file_path.slice(slash + 1);
+                const score = typeof r.score === 'number' ? r.score : null;
+                const bar = score === null ? '' :
+                    `<div class="score-track" title="similarity ${score.toFixed(2)}"><div class="score-fill" style="width:${Math.round(score * 100)}%;background:${scoreColor(score)}"></div></div>${score.toFixed(2)}`;
+                li.innerHTML = `
+                    <div class="card-header">
+                        <span class="filename"><span class="dir">${esc(dir)}</span><span class="base">${esc(base)}</span></span>
+                        <span class="line-range">${Number(r.line_start)}–${Number(r.line_end)}</span>
+                    </div>
+                    <div class="symbol-row">
+                        <span class="symbol-name" title="${esc(r.symbol_name)}">${esc(r.symbol_name)}</span>
+                        <span class="tags">
+                            <span class="tag">${esc(r.kind)}</span>
+                            <span class="tag ${r.match === 'both' ? 'both' : ''}" title="found by ${esc(r.match)} search">${esc(r.match)}</span>
+                            ${bar}
+                        </span>
+                    </div>
+                    <pre class="code-block">${highlight(r.chunk_text, r.language, terms)}</pre>
+                    <div class="card-actions">
+                        <button class="ghost-btn jump-btn">Open</button>
+                        <button class="ghost-btn copy-btn">Copy</button>
+                    </div>`;
+                li.addEventListener('click', (e) => {
+                    if (e.target.closest('.copy-btn')) {
+                        vscode.postMessage({ type: 'copy', text: r.chunk_text });
+                        return;
+                    }
+                    if (window.getSelection().toString()) return;  // let people select code text
+                    select(idx);
+                    jump(r);
+                });
+                ui.results.appendChild(li);
+                cards.push(li);
             });
         }
 
-        uiTokens.btnSearch.addEventListener('click', execSearchWorkflow);
-        uiTokens.btnReindex.addEventListener('click', () => {
-             uiTokens.resultsCont.innerHTML = '';
-             uiTokens.metaRow.classList.add('hidden');
-             uiTokens.explainCont.innerHTML = '';
-             uiTokens.emptyState?.classList.add('hidden');
-             
-             uiTokens.progCont.classList.remove('hidden');
-             uiTokens.progBar.style.width = '0%';
-             vscode.postMessage({ type: 'reindex' });
+        function select(i) {
+            cards.forEach(c => c.classList.remove('selected'));
+            selected = i;
+            if (i >= 0 && cards[i]) {
+                cards[i].classList.add('selected');
+                cards[i].scrollIntoView({ block: 'nearest' });
+            }
+        }
+
+        function jump(r) {
+            vscode.postMessage({ type: 'jumpTo', file: r.file_path, line: r.line_start, lineEnd: r.line_end });
+        }
+
+        function setChunkCount(n) {
+            chunkCount = n;
+            ui.badge.textContent = `${n} chunks`;
+        }
+
+        // ---------------------------------------------------------------
+        // Searching
+        // ---------------------------------------------------------------
+        function hasContent(q) {
+            const text = q.replace(/(^|\s)-?(in|lang|kind):("[^"]*"?|\S*)/gi, ' ').trim();
+            return text.length >= 3 || text.length < q.trim().length;  // words, or filters alone
+        }
+
+        function sendQuery(live) {
+            const q = ui.input.value.trim();
+            clearTimeout(liveTimer);
+            if (!q) return;
+            lastQuery = q;
+            vscode.setState({ query: ui.input.value });
+            seq += 1;
+            if (!live) showSkeleton();
+            vscode.postMessage({ type: 'query', text: q, explain: !live && ui.explain.checked, live, seq });
+        }
+
+        ui.input.addEventListener('input', () => {
+            clearTimeout(liveTimer);
+            const q = ui.input.value.trim();
+            vscode.setState({ query: ui.input.value });
+            if (!q) {
+                seq += 1;   // drop results still in flight
+                clearResults();
+                ui.notices.innerHTML = '';
+                showEmptyState(true);
+                return;
+            }
+            if (hasContent(q) && q !== lastQuery) {
+                liveTimer = setTimeout(() => sendQuery(true), LIVE_DELAY_MS);
+            }
         });
 
-        uiTokens.input.addEventListener('keydown', (e) => {
+        ui.input.addEventListener('keydown', (e) => {
             if (e.key === 'Enter') {
-                execSearchWorkflow();
-            } else if (e.key === 'Escape') {
-                uiTokens.input.value = '';
-                uiTokens.input.blur();
+                e.preventDefault();
+                if (selected >= 0 && lastResults[selected] && ui.input.value.trim() === lastQuery) {
+                    jump(lastResults[selected]);
+                } else {
+                    lastQuery = '';
+                    sendQuery(false);
+                }
             } else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
-                if (resultElements.length > 0) {
-                    e.preventDefault();
-                    if (e.key === 'ArrowDown') navigationIndex = Math.min(navigationIndex + 1, resultElements.length - 1);
-                    if (e.key === 'ArrowUp') navigationIndex = Math.max(navigationIndex - 1, 0);
-                    
-                    resultElements.forEach(el => el.style.borderColor = 'var(--vscode-panel-border)');
-                    if (navigationIndex >= 0) {
-                        resultElements[navigationIndex].style.borderColor = 'var(--vscode-focusBorder)';
-                        resultElements[navigationIndex].scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-                    }
+                if (!cards.length) return;
+                e.preventDefault();
+                const next = e.key === 'ArrowDown' ? Math.min(selected + 1, cards.length - 1) : Math.max(selected - 1, 0);
+                select(next);
+            } else if (e.key === 'Escape') {
+                if (selected >= 0) {
+                    select(-1);
+                } else {
+                    ui.input.value = '';
+                    ui.input.dispatchEvent(new Event('input'));
                 }
             }
         });
 
+        ui.btnSearch.addEventListener('click', () => { lastQuery = ''; sendQuery(false); });
+        ui.btnReindex.addEventListener('click', (e) => {
+            vscode.postMessage({ type: 'reindex', force: e.shiftKey });
+        });
+        ui.btnReindex.title = 'Index new and changed files (Shift+click: rebuild from scratch)';
+
         document.querySelectorAll('.chip').forEach(chip => {
             chip.addEventListener('click', () => {
-                uiTokens.input.value = chip.dataset.query;
-                execSearchWorkflow();
+                ui.input.value = chip.dataset.query;
+                lastQuery = '';
+                sendQuery(false);
             });
         });
 
-        const deriveMetricIntensity = (val) => {
-            if (val > 0.85) return 'var(--bar-green)';
-            if (val > 0.70) return 'var(--bar-amber)';
-            return 'var(--bar-red)';
-        };
-
-        window.addEventListener('message', event => {
-            const stream = event.data;
-            switch (stream.type) {
+        // ---------------------------------------------------------------
+        // Messages from the extension
+        // ---------------------------------------------------------------
+        window.addEventListener('message', (event) => {
+            const msg = event.data;
+            switch (msg.type) {
                 case 'results':
-                    uiTokens.progCont.classList.add('hidden');
-                    uiTokens.resultsCont.innerHTML = '';
-                    uiTokens.metaRow.classList.remove('hidden');
-                    uiTokens.metaTxt.innerText = `${stream.data.length} results · ${stream.query_ms}ms`;
-                    
-                    if (stream.total_indexed) {
-                        uiTokens.chunkBadge.innerText = `${stream.total_indexed} chunks`;
-                    }
-                    
-                    if (stream.explain_text) {
-                        uiTokens.explainCont.innerHTML = `
-                            <div class="ai-explanation">
-                                <strong>AI Core Detail Analysis:</strong><br>
-                                ${stream.explain_text}
-                            </div>
-                        `;
-                    }
-
-                    if (stream.data.length === 0) {
-                        uiTokens.resultsCont.innerHTML = `<div style="text-align: center; color: var(--vscode-descriptionForeground); margin-top:20px;">No exact matches found structure. Consider attempting an internal index reload tracking mechanism.</div>`;
-                        return;
-                    }
-
-                    resultElements = [];
-                    navigationIndex = -1;
-
-                    stream.data.forEach((r, idx) => {
-                        const calculatedWidth = (Math.max(0, Math.min(1, r.score)) * 100).toFixed(0);
-                        const severityClassColor = deriveMetricIntensity(r.score);
-                        
-                        const li = document.createElement('li');
-                        li.className = 'result-card';
-                        li.style.animationDelay = `${idx * 50}ms`;
-                        
-                        li.innerHTML = `
-                            <div class="card-header">
-                                <span class="filename">${r.file_path}</span>
-                                <span class="line-range">line ${r.line_start}–${r.line_end}</span>
-                            </div>
-                            <div class="symbol-row">
-                                <span class="symbol-name" title="${r.symbol_name}">${r.symbol_name}</span>
-                                <div class="score-wrap">
-                                    <div class="score-track"><div class="score-fill" style="width: ${calculatedWidth}%; background-color: ${severityClassColor};"></div></div>
-                                    ${(r.score).toFixed(2)}
-                                </div>
-                            </div>
-                            <div class="divider"></div>
-                            <pre class="code-block">${syntaxParser.highlight(r.chunk_text)}</pre>
-                            <div class="card-actions">
-                                <button class="ghost-btn jump-btn" data-file="${r.file_path}" data-line="${r.line_start}">Jump to file →</button>
-                                <button class="ghost-btn cp-btn">Copy</button>
-                            </div>
-                        `;
-                        
-                        li.querySelector('.jump-btn').addEventListener('click', () => {
-                            vscode.postMessage({ type: 'jumpTo', file: r.file_path, line: r.line_start });
-                        });
-                        
-                        uiTokens.resultsCont.appendChild(li);
-                        resultElements.push(li);
-                    });
-                    
+                    if (msg.seq < seq) return;   // a newer query is on its way
+                    shownSeq = msg.seq;
+                    renderResults(msg);
                     break;
-                    
-                case 'indexProgress':
-                    uiTokens.progFile.innerText = stream.file;
-                    uiTokens.progBar.style.width = `${Math.min(100, stream.pct)}%`;
-                    uiTokens.progPct.innerText = Math.round(stream.pct);
-                    uiTokens.chunkBadge.innerText = stream.message;
-                    break;
-                    
-                case 'status':
-                    uiTokens.progCont.classList.add('hidden');
-                    uiTokens.chunkBadge.innerText = `${stream.chunks} chunks`;
-                    uiTokens.healthDot.className = 'status-dot'; 
-                    document.getElementById('empty-state')?.classList.remove('hidden');
-                    break;
-                    
+
                 case 'error':
-                    uiTokens.progCont.classList.add('hidden');
-                    uiTokens.healthDot.className = 'status-dot red';
-                    uiTokens.resultsCont.innerHTML = `<div style="color: var(--bar-red);">${stream.message}</div>`;
+                    if (msg.seq !== undefined && msg.seq < seq) return;
+                    ui.results.innerHTML = '';
+                    cards = [];
+                    ui.notices.innerHTML = '';
+                    notice(msg.message, 'error');
                     break;
+
+                case 'focus':
+                    ui.input.focus();
+                    ui.input.select();
+                    break;
+
+                case 'setQuery':
+                    ui.input.value = msg.text;
+                    lastQuery = '';
+                    sendQuery(false);
+                    break;
+
+                case 'indexStart':
+                    indexing = true;
+                    ui.btnReindex.disabled = true;
+                    ui.progress.classList.remove('hidden');
+                    ui.progPhase.textContent = msg.force ? 'Rebuilding index' : 'Reading files';
+                    ui.progBar.style.width = '0%';
+                    ui.progFile.textContent = '';
+                    break;
+
+                case 'indexProgress': {
+                    const pct = msg.total ? (msg.done / msg.total) * 100 : 100;
+                    ui.progPhase.textContent = msg.phase === 'embed'
+                        ? `Embedding ${msg.done} / ${msg.total} chunks`
+                        : `Reading files ${msg.done} / ${msg.total}`;
+                    ui.progBar.style.width = `${Math.min(100, pct)}%`;
+                    ui.progFile.textContent = msg.file || '';
+                    break;
+                }
+
+                case 'indexDone':
+                    indexing = false;
+                    ui.btnReindex.disabled = false;
+                    ui.progress.classList.add('hidden');
+                    setChunkCount(msg.total_chunks);
+                    if (lastQuery) { lastQuery = ''; sendQuery(false); }
+                    break;
+
+                case 'status': {
+                    if (!indexing) ui.btnReindex.disabled = !!msg.indexing;
+                    ui.notices.querySelectorAll('.status-notice').forEach(n => n.remove());
+                    if (!msg.online) {
+                        ui.dot.className = 'status-dot red';
+                        ui.dot.title = 'Backend offline';
+                        ui.badge.textContent = 'offline';
+                        break;
+                    }
+                    setChunkCount(msg.indexed_chunks);
+                    const partial = msg.embedded_chunks < msg.indexed_chunks;
+                    ui.dot.className = 'status-dot ' + (!msg.ollama || partial ? 'amber' : 'green');
+                    ui.dot.title = !msg.ollama
+                        ? 'Ollama is offline: keyword search only'
+                        : partial ? `${msg.embedded_chunks} of ${msg.indexed_chunks} chunks have vectors`
+                        : `${msg.files} files · ${msg.vector_backend} · ${msg.embed_model}${msg.watching ? ' · watching' : ''}`;
+                    if (msg.ollama && !msg.modelPulled) {
+                        notice(`The embedding model is not pulled. Run: ollama pull ${msg.embedModel}`, 'status-notice');
+                    }
+                    if (msg.indexed_chunks === 0 && !msg.indexing && !indexing) {
+                        notice('This workspace is not indexed yet.', 'status-notice', {
+                            label: 'Index workspace', run: () => vscode.postMessage({ type: 'reindex', force: false }),
+                        });
+                    }
+                    break;
+                }
             }
         });
+
+        const state = vscode.getState();
+        if (state && state.query) {
+            ui.input.value = state.query;
+            if (state.query.trim()) sendQuery(false);
+        }
+        vscode.postMessage({ type: 'ready' });
+        ui.input.focus();
+    })();
     </script>
 </body>
 </html>

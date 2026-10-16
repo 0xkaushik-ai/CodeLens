@@ -1,8 +1,8 @@
 {
   "name": "codelens",
   "displayName": "CodeLens — Offline Semantic Search",
-  "description": "Natural-language semantic search for your codebase. 100% offline, powered by Actian VectorAI DB + Ollama.",
-  "version": "0.2.0",
+  "description": "Natural-language and keyword search for your codebase. 100% offline: SQLite + sqlite-vec + Ollama.",
+  "version": "0.3.0",
   "publisher": "nikhilmourya",
   "repository": {
     "type": "git",
@@ -19,8 +19,9 @@
     "semantic search",
     "code search",
     "offline",
-    "AI",
-    "vector database"
+    "hybrid search",
+    "sqlite-vec",
+    "ollama"
   ],
   "activationEvents": [
     "onStartupFinished"
@@ -48,8 +49,12 @@
     "commands": [
       {
         "command": "codelens.search",
-        "title": "CodeLens: Semantic Search",
+        "title": "CodeLens: Search",
         "icon": "$(search)"
+      },
+      {
+        "command": "codelens.searchSelection",
+        "title": "CodeLens: Find Similar Code"
       },
       {
         "command": "codelens.reindex",
@@ -57,33 +62,79 @@
         "icon": "$(sync)"
       },
       {
+        "command": "codelens.rebuildIndex",
+        "title": "CodeLens: Rebuild Index From Scratch"
+      },
+      {
+        "command": "codelens.restartBackend",
+        "title": "CodeLens: Restart Backend"
+      },
+      {
         "command": "codelens.showStatus",
-        "title": "CodeLens: Show Status"
+        "title": "CodeLens: Show Logs"
       }
     ],
     "menus": {
-      "editor/title": [
+      "view/title": [
         {
           "command": "codelens.reindex",
+          "when": "view == codelens.sidebar",
           "group": "navigation"
         }
+      ],
+      "editor/context": [
+        {
+          "command": "codelens.searchSelection",
+          "when": "editorHasSelection",
+          "group": "navigation@9"
+        }
       ]
+    },
+    "keybindings": [
+      {
+        "command": "codelens.search",
+        "key": "ctrl+alt+k",
+        "mac": "cmd+alt+k"
+      }
+    ],
+    "configuration": {
+      "title": "CodeLens",
+      "properties": {
+        "codelens.pythonPath": {
+          "type": "string",
+          "default": "",
+          "description": "Python used to run the backend. Empty: the backend folder's .venv, then python3."
+        },
+        "codelens.backendPath": {
+          "type": "string",
+          "default": "",
+          "description": "Folder containing backend/main.py. Empty: the copy bundled with the extension."
+        },
+        "codelens.port": {
+          "type": "number",
+          "default": 8000,
+          "description": "Port of the local backend."
+        },
+        "codelens.autoStartBackend": {
+          "type": "boolean",
+          "default": true,
+          "description": "Start the backend when VS Code starts, unless one is already running."
+        }
+      }
     }
   },
   "scripts": {
-    "build":            "tsc -p ./",
-    "watch":            "tsc -watch -p ./",
-    "compile":          "tsc -p ./",
+    "build": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "compile": "tsc -p ./",
     "vscode:prepublish": "npm run compile",
-    "package":          "vsce package --no-dependencies"
+    "package": "vsce package"
   },
   "devDependencies": {
-    "@types/vscode": "^1.86.0",
     "@types/node": "18.x",
-    "typescript": "^5.3.3",
-    "@vscode/vsce": "^3.0.0"
-  },
-  "dependencies": {
-    "axios": "^1.6.8"
+    "@types/vscode": "^1.86.0",
+    "@vscode/vsce": "^3.0.0",
+    "playwright-core": "^1.48.2",
+    "typescript": "^5.3.3"
   }
 }

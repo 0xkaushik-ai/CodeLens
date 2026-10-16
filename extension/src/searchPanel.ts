@@ -1,146 +1,197 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
-import axios from 'axios';
-import * as http from 'http';
+import * as crypto from 'crypto';
+import { CodeLensClient } from './client';
+
+type WebviewMessage =
+    | { type: 'ready' }
+    | { type: 'query'; text: string; explain: boolean; live: boolean; seq: number }
+    | { type: 'jumpTo'; file: string; line: number; lineEnd: number }
+    | { type: 'copy'; text: string }
+    | { type: 'reindex'; force: boolean };
 
 export class SearchPanelProvider implements vscode.WebviewViewProvider {
-    private _view?: vscode.WebviewView;
+    private view?: vscode.WebviewView;
+    private inFlight?: AbortController;
+    private indexing = false;
+    private pendingSearch?: string;
+    private readonly flash = vscode.window.createTextEditorDecorationType({
+        backgroundColor: new vscode.ThemeColor('editor.findMatchHighlightBackground'),
+        isWholeLine: true,
+    });
 
-    constructor(private readonly _extensionUri: vscode.Uri) {}
+    constructor(
+        private readonly extensionUri: vscode.Uri,
+        private readonly client: CodeLensClient,
+        private readonly output: vscode.OutputChannel,
+    ) {}
 
-    public resolveWebviewView(
-        webviewView: vscode.WebviewView,
-        context: vscode.WebviewViewResolveContext,
-        _token: vscode.CancellationToken,
-    ) {
-        this._view = webviewView;
-        webviewView.webview.options = { 
+    resolveWebviewView(webviewView: vscode.WebviewView) {
+        this.view = webviewView;
+        webviewView.webview.options = {
             enableScripts: true,
-            localResourceRoots: [this._extensionUri]
+            localResourceRoots: [vscode.Uri.joinPath(this.extensionUri, 'extension', 'media')],
         };
-
-        webviewView.webview.html = this.getHtmlForWebview();
-
-        // 1. Process Messages dispatched from panel.html WebView runtime
-        webviewView.webview.onDidReceiveMessage(async (data) => {
-            switch (data.type) {
-                case 'query':
-                    this.handleQuery(data.text, data.explain);
-                    break;
-                case 'jumpTo':
-                    this.handleJumpTo(data.file, data.line);
-                    break;
-                case 'reindex':
-                    this.handleReindex();
-                    break;
-            }
-        });
+        webviewView.webview.html = this.getHtml(webviewView.webview);
+        webviewView.webview.onDidReceiveMessage((msg: WebviewMessage) => this.onMessage(msg));
     }
 
-    public triggerReindex() {
-        this.handleReindex();
+    /** Workspace folder of the active editor, else the first folder. */
+    repoRoot(): string | undefined {
+        const uri = vscode.window.activeTextEditor?.document.uri;
+        const folder = (uri && vscode.workspace.getWorkspaceFolder(uri)) ?? vscode.workspace.workspaceFolders?.[0];
+        return folder?.uri.fsPath;
     }
 
-    private async handleQuery(text: string, explain: boolean) {
-        try {
-            // Native Axios bindings directly parsing localhost backend
-            const res = await axios.post(`http://127.0.0.1:8000/query`, {
-                query: text,
-                top_k: 8,
-                explain: explain
-            });
-            this._view?.webview.postMessage({
-                type: 'results',
-                data: res.data.results,
-                explain_text: res.data.explain_text,
-                query_ms: res.data.query_ms,
-                total_indexed: res.data.total_indexed
-            });
-        } catch (error: any) {
-             this._view?.webview.postMessage({ type: 'error', message: error.message });
+    focus() {
+        vscode.commands.executeCommand('codelens.sidebar.focus').then(() => this.post({ type: 'focus' }));
+    }
+
+    /** Run a search from outside the panel (e.g. "find similar code"). */
+    search(text: string) {
+        this.pendingSearch = text;
+        this.focus();
+        if (this.view) {
+            this.post({ type: 'setQuery', text });
+            this.pendingSearch = undefined;
         }
     }
 
-    private async handleReindex() {
-        const workspaceDir = vscode.workspace.workspaceFolders?.[0].uri.fsPath;
-        if (!workspaceDir) {
-            this._view?.webview.postMessage({ type: 'error', message: 'No valid workspace currently open.' });
+    private post(message: unknown) {
+        this.view?.webview.postMessage(message);
+    }
+
+    private async onMessage(msg: WebviewMessage) {
+        switch (msg.type) {
+            case 'ready':
+                await this.refreshStatus();
+                if (this.pendingSearch) {
+                    this.post({ type: 'setQuery', text: this.pendingSearch });
+                    this.pendingSearch = undefined;
+                }
+                break;
+            case 'query':
+                await this.runQuery(msg.text, msg.explain, msg.live, msg.seq);
+                break;
+            case 'jumpTo':
+                await this.jumpTo(msg.file, msg.line, msg.lineEnd);
+                break;
+            case 'copy':
+                await vscode.env.clipboard.writeText(msg.text);
+                vscode.window.setStatusBarMessage('CodeLens: copied', 1500);
+                break;
+            case 'reindex':
+                await this.reindex(msg.force);
+                break;
+        }
+    }
+
+    private async runQuery(text: string, explain: boolean, live: boolean, seq: number) {
+        // A newer keystroke supersedes the request in flight
+        this.inFlight?.abort();
+        const controller = new AbortController();
+        this.inFlight = controller;
+        const repo = this.repoRoot();
+        try {
+            const res = await this.client.query(
+                { query: text, top_k: 10, explain, live, repo_path: repo }, controller.signal);
+            this.post({ type: 'results', seq, repo, ...res });
+        } catch (e: any) {
+            if (controller.signal.aborted) { return; }
+            this.post({ type: 'error', seq, message: describeError(e) });
+        } finally {
+            if (this.inFlight === controller) { this.inFlight = undefined; }
+        }
+    }
+
+    async reindex(force: boolean) {
+        const repo = this.repoRoot();
+        if (!repo) {
+            this.post({ type: 'error', message: 'Open a folder to index it.' });
             return;
         }
-
-        const payload = JSON.stringify({ repo_path: workspaceDir, force_reindex: true });
-        
-        // Native http mapping capturing raw text/event-stream signals from Uvicorn without Axios block mapping abstractions
-        const req = http.request('http://127.0.0.1:8000/index', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Content-Length': Buffer.byteLength(payload)
-            }
-        }, (res) => {
-            res.on('data', (bufferChunk) => {
-                const events = bufferChunk.toString().split('\n\n');
-                
-                for (const ev of events) {
-                    if (ev.startsWith('data: ')) {
-                        try {
-                            const parsed = JSON.parse(ev.substring(6));
-                            if(parsed.type === "progress") {
-                                // Maps exactly onto the Webview message protocol specified
-                                this._view?.webview.postMessage({
-                                    type: 'indexProgress',
-                                    file: parsed.file,
-                                    pct: (parsed.chunks / Math.max(1, parsed.total_files)) * 100,
-                                    message: `${parsed.chunks} chunks found`
-                                });
-                            } else if (parsed.type === "complete") {
-                                this._view?.webview.postMessage({
-                                    type: 'status',
-                                    chunks: parsed.total_chunks,
-                                    watching: true
-                                });
-                            } else if (parsed.type === "error") {
-                                this._view?.webview.postMessage({ type: 'error', message: parsed.message });
-                            }
-                        } catch (e) {
-                            // Ignored partial streaming fragments
-                        }
+        if (this.indexing) { return; }
+        this.indexing = true;
+        this.focus();
+        this.post({ type: 'indexStart', force });
+        try {
+            for await (const ev of this.client.index(repo, force)) {
+                if (ev.type === 'progress') {
+                    this.post({ type: 'indexProgress', phase: ev.phase, done: ev.done, total: ev.total, file: ev.file });
+                } else if (ev.type === 'error') {
+                    this.output.appendLine(`Index error in ${ev.file}: ${ev.message}`);
+                } else if (ev.type === 'complete') {
+                    this.output.appendLine(
+                        `Indexed ${repo}: ${ev.files} files (${ev.changed} changed, ${ev.removed} removed), ` +
+                        `${ev.total_chunks} chunks, ${ev.embedded} embedded in ${ev.duration_ms}ms`);
+                    this.post({ ...ev, type: 'indexDone' });
+                    if (ev.embed_error) {
+                        vscode.window.showWarningMessage(
+                            'CodeLens indexed your files, but embeddings failed. Keyword search works; ' +
+                            'semantic search needs Ollama. Re-index once it is running.', 'Show Logs')
+                            .then(c => { if (c) { this.output.show(); } });
                     }
                 }
-            });
-        });
-        
-        req.on('error', (e) => {
-             this._view?.webview.postMessage({ type: 'error', message: 'Failed maintaining local index SSE connection.' });
-        });
-        
-        req.write(payload);
-        req.end();
-    }
-
-    private async handleJumpTo(file: string, line: number) {
-        const workspace = vscode.workspace.workspaceFolders?.[0].uri.fsPath;
-        if (!workspace) return;
-        
-        const absolutePath = path.join(workspace, file);
-        try {
-            const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(absolutePath));
-            const editor = await vscode.window.showTextDocument(doc);
-            
-            // Adjust to VS Code internal 0-indexed engine structure safely mapping bounds
-            const vsLine = Math.max(0, line - 1);
-            const range = new vscode.Range(vsLine, 0, vsLine, 0);
-            
-            editor.selection = new vscode.Selection(range.start, range.end);
-            editor.revealRange(range, vscode.TextEditorRevealType.InCenter);
+            }
         } catch (e: any) {
-            vscode.window.showErrorMessage(`Cannot open file: ${e.message}`);
+            this.post({ type: 'error', message: describeError(e) });
+        } finally {
+            this.indexing = false;
+            await this.refreshStatus();
         }
     }
 
-    private getHtmlForWebview() {
-        const htmlPath = vscode.Uri.joinPath(this._extensionUri, 'media', 'panel.html');
-        return fs.readFileSync(htmlPath.fsPath, 'utf-8');
+    async refreshStatus() {
+        const health = await this.client.health();
+        if (!health) {
+            this.post({ type: 'status', online: false });
+            return;
+        }
+        try {
+            const status = await this.client.status(this.repoRoot());
+            this.post({
+                type: 'status', online: true, ollama: health.ollama, modelPulled: health.embed_model_pulled,
+                embedModel: health.embed_model, ...status,
+            });
+        } catch (e: any) {
+            this.post({ type: 'status', online: false, message: describeError(e) });
+        }
     }
+
+    private async jumpTo(file: string, line: number, lineEnd: number) {
+        const root = this.repoRoot();
+        if (!root) { return; }
+        const absolute = path.resolve(root, file);
+        if (path.relative(root, absolute).startsWith('..')) { return; }  // stay inside the workspace
+        try {
+            const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(absolute));
+            const editor = await vscode.window.showTextDocument(doc);
+            const start = Math.max(0, Math.min(line - 1, doc.lineCount - 1));
+            const end = Math.max(start, Math.min(lineEnd - 1, doc.lineCount - 1));
+            const pos = new vscode.Position(start, doc.lineAt(start).firstNonWhitespaceCharacterIndex);
+            editor.selection = new vscode.Selection(pos, pos);
+            editor.revealRange(new vscode.Range(start, 0, end, 0), vscode.TextEditorRevealType.InCenterIfOutsideViewport);
+            editor.setDecorations(this.flash, [new vscode.Range(start, 0, end, 0)]);
+            setTimeout(() => editor.setDecorations(this.flash, []), 1200);
+        } catch (e: any) {
+            vscode.window.showErrorMessage(`CodeLens: cannot open ${file}: ${e.message}`);
+        }
+    }
+
+    private getHtml(webview: vscode.Webview): string {
+        const htmlPath = vscode.Uri.joinPath(this.extensionUri, 'extension', 'media', 'panel.html');
+        const nonce = crypto.randomBytes(16).toString('base64');
+        return fs.readFileSync(htmlPath.fsPath, 'utf-8')
+            .replace(/\{\{cspSource\}\}/g, webview.cspSource)
+            .replace(/\{\{nonce\}\}/g, nonce);
+    }
+}
+
+function describeError(e: any): string {
+    if (e?.cause?.code === 'ECONNREFUSED' || e?.message === 'fetch failed') {
+        return 'The CodeLens backend is not running. Run "CodeLens: Restart Backend" or see the CodeLens output.';
+    }
+    if (e?.name === 'TimeoutError') { return 'The backend took too long to answer.'; }
+    return e?.message ?? String(e);
 }
