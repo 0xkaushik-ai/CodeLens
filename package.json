@@ -1,8 +1,8 @@
 {
   "name": "codelens",
   "displayName": "CodeLens — Offline Semantic Search",
-  "description": "Natural-language and keyword search for your codebase. 100% offline: SQLite + sqlite-vec + Ollama.",
-  "version": "0.3.0",
+  "description": "Natural-language and keyword search for your codebase, plus code explanations. 100% offline: SQLite + sqlite-vec + optional Ollama.",
+  "version": "0.4.0",
   "publisher": "nikhilmourya",
   "repository": {
     "type": "git",
@@ -57,6 +57,10 @@
         "title": "CodeLens: Find Similar Code"
       },
       {
+        "command": "codelens.explainSelection",
+        "title": "CodeLens: Explain Selection"
+      },
+      {
         "command": "codelens.reindex",
         "title": "CodeLens: Re-index Workspace",
         "icon": "$(sync)"
@@ -64,6 +68,10 @@
       {
         "command": "codelens.rebuildIndex",
         "title": "CodeLens: Rebuild Index From Scratch"
+      },
+      {
+        "command": "codelens.setupBackend",
+        "title": "CodeLens: Set Up Search Engine"
       },
       {
         "command": "codelens.restartBackend",
@@ -87,6 +95,11 @@
           "command": "codelens.searchSelection",
           "when": "editorHasSelection",
           "group": "navigation@9"
+        },
+        {
+          "command": "codelens.explainSelection",
+          "when": "editorHasSelection",
+          "group": "navigation@10"
         }
       ]
     },
@@ -119,6 +132,16 @@
           "type": "boolean",
           "default": true,
           "description": "Start the backend when VS Code starts, unless one is already running."
+        },
+        "codelens.ollamaHost": {
+          "type": "string",
+          "default": "",
+          "description": "Ollama address for a backend started by the extension, e.g. http://localhost:11434. Empty: the backend's default (OLLAMA_HOST or http://localhost:11434). Ollama is optional: without it, search matches words only and Explain is off."
+        },
+        "codelens.explainModel": {
+          "type": "string",
+          "default": "",
+          "description": "Ollama model used by Explain, e.g. mistral, llama3.2, qwen2.5-coder. Empty: the backend's default (EXPLAIN_MODEL or mistral). Pull it first: ollama pull <model>."
         }
       }
     }

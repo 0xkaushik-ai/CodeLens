@@ -3,6 +3,7 @@ name: CI
 on:
   push:
     branches: [main]
+    tags: ["v*"]
   pull_request:
 
 jobs:
@@ -36,3 +37,21 @@ jobs:
         with:
           name: codelens-vsix
           path: codelens.vsix
+
+  # Push a tag like v0.4.0 to publish the .vsix on the GitHub Releases page,
+  # so people can install the extension without building it.
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [backend, extension]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: codelens-vsix
+      - run: mv codelens.vsix "codelens-${GITHUB_REF_NAME#v}.vsix"
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: codelens-*.vsix
+          generate_release_notes: true

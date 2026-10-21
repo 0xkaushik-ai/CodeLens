@@ -20,3 +20,4 @@ backend.Dockerfile
 .env
 .env.example
 scripts/**
+docs/**

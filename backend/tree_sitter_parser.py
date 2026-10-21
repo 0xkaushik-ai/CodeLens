@@ -47,8 +47,13 @@ _LANG_DEFS: dict[str, tuple[Language, str]] = {
 try:
     import tree_sitter_cpp
     _cpp = Language(tree_sitter_cpp.language())
-    for _ext in (".cpp", ".cc", ".cxx", ".hpp", ".hh", ".h"):
+    # C is parsed with the C++ grammar: it is close to a superset for chunking purposes
+    for _ext in (".cpp", ".cc", ".cxx", ".hpp", ".hh", ".h", ".c"):
         _LANG_DEFS[_ext] = (_cpp, "cpp")
+    # CUDA kernels: the C++ grammar recovers around __global__/__device__ and <<<...>>>,
+    # so functions are still found. Tagged "cuda" so `lang:cuda` can pick them out.
+    for _ext in (".cu", ".cuh"):
+        _LANG_DEFS[_ext] = (_cpp, "cuda")
 except ImportError:
     pass
 
@@ -77,6 +82,7 @@ FUNCTION_TYPES: dict[str, set[str]] = {
     "rust":       {"function_item"},
     "java":       {"method_declaration", "constructor_declaration"},
     "cpp":        {"function_definition"},
+    "cuda":       {"function_definition"},
 }
 CONTAINER_TYPES: dict[str, set[str]] = {
     "python":     {"class_definition"},
@@ -87,6 +93,7 @@ CONTAINER_TYPES: dict[str, set[str]] = {
     "rust":       {"impl_item", "trait_item", "mod_item"},
     "java":       {"class_declaration", "interface_declaration", "enum_declaration", "record_declaration"},
     "cpp":        {"class_specifier", "struct_specifier"},
+    "cuda":       {"class_specifier", "struct_specifier"},
 }
 TYPE_TYPES: dict[str, set[str]] = {
     "python":     set(),
@@ -97,6 +104,7 @@ TYPE_TYPES: dict[str, set[str]] = {
     "rust":       {"struct_item", "enum_item"},
     "java":       set(),
     "cpp":        set(),
+    "cuda":       set(),
 }
 
 # Kept for backwards compatibility with older imports

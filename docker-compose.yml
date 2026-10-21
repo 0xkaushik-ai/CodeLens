@@ -1,29 +1,44 @@
+# CodeLens backend + Ollama in containers. See "Run with Docker" in README.md.
+#
+#   docker compose up -d                 # backend + Ollama (pulls nomic-embed-text on first start)
+#   docker compose up -d --no-deps backend   # backend only, using an Ollama you already run
+#
+# The VS Code extension finds the backend on http://127.0.0.1:8000 and uses it
+# instead of starting its own.
 services:
   backend:
     build:
       context: .
       dockerfile: backend.Dockerfile
+    restart: unless-stopped
     ports:
       - "127.0.0.1:8000:8000"   # local only: the API reads your source code
     environment:
       - CODELENS_DB_PATH=/data
-      - OLLAMA_HOST=http://ollama:11434
-      - EMBED_MODEL=nomic-embed-text
+      # Set OLLAMA_HOST=http://host.docker.internal:11434 to use Ollama running on your machine
+      - OLLAMA_HOST=${OLLAMA_HOST:-http://ollama:11434}
+      - EMBED_MODEL=${EMBED_MODEL:-nomic-embed-text}
+      - EXPLAIN_MODEL=${EXPLAIN_MODEL:-mistral}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"   # needed on Linux for the line above
     volumes:
       - codelens_data:/data
-      # Repos are indexed by absolute path, so mount your home at the same path (read-only)
+      # Repos are indexed by absolute path, so your home is mounted at the same path (read-only).
+      # Index a repo outside your home? Add another line like: - /srv/code:/srv/code:ro
       - ${HOME}:${HOME}:ro
     depends_on:
       - ollama
 
   ollama:
     image: ollama/ollama:latest
+    restart: unless-stopped
     ports:
       - "127.0.0.1:11434:11434"
     volumes:
       - ollama_data:/root/.ollama
+    # Serve, and pull the embedding model once (it is kept in the ollama_data volume)
     entrypoint: >
-      sh -c "ollama serve & sleep 3 && ollama pull nomic-embed-text && wait"
+      sh -c "ollama serve & sleep 3 && ollama pull ${EMBED_MODEL:-nomic-embed-text} && wait"
 
 volumes:
   codelens_data:

@@ -8,9 +8,9 @@
     <title>CodeLens</title>
     <style>
         :root {
-            --bar-green: #3fb950;
-            --bar-amber: #d29922;
-            --bar-red: #f85149;
+            --ok: #3fb950;
+            --warn: #d29922;
+            --bad: #f85149;
             --card-radius: 6px;
         }
 
@@ -41,9 +41,9 @@
             width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
             background-color: var(--vscode-descriptionForeground);
         }
-        .status-dot.green { background-color: var(--bar-green); }
-        .status-dot.amber { background-color: var(--bar-amber); }
-        .status-dot.red { background-color: var(--bar-red); }
+        .status-dot.green { background-color: var(--ok); }
+        .status-dot.amber { background-color: var(--warn); }
+        .status-dot.red { background-color: var(--bad); }
 
         .link-btn {
             background: transparent;
@@ -74,13 +74,9 @@
         .search-controls {
             display: flex;
             align-items: center;
-            justify-content: space-between;
+            justify-content: flex-end;
             font-size: 12px;
             margin: 8px 0 12px;
-        }
-        .checkbox-wrapper {
-            display: flex; align-items: center; gap: 6px;
-            color: var(--vscode-descriptionForeground); cursor: pointer;
         }
         .search-btn {
             background-color: var(--vscode-button-background);
@@ -106,6 +102,8 @@
             margin-bottom: 8px;
             display: flex;
             justify-content: space-between;
+            align-items: baseline;
+            gap: 8px;
         }
 
         .notice {
@@ -113,11 +111,11 @@
             padding: 8px 10px;
             border-radius: var(--card-radius);
             margin-bottom: 10px;
-            border-left: 3px solid var(--bar-amber);
+            border-left: 3px solid var(--warn);
             background: var(--vscode-textBlockQuote-background);
         }
-        .notice.error { border-left-color: var(--bar-red); }
-        .notice button { margin-top: 6px; }
+        .notice.error { border-left-color: var(--bad); }
+        .notice .notice-actions { display: flex; gap: 6px; margin-top: 6px; flex-wrap: wrap; }
 
         #results { display: flex; flex-direction: column; gap: 10px; list-style: none; padding: 0; margin: 0; }
 
@@ -151,9 +149,6 @@
         }
         .tags { display: flex; align-items: center; gap: 6px; font-size: 10px; color: var(--vscode-descriptionForeground); flex-shrink: 0; }
         .tag { border: 1px solid var(--vscode-panel-border); border-radius: 8px; padding: 0 5px; }
-        .tag.both { border-color: var(--bar-green); }
-        .score-track { width: 32px; height: 4px; background-color: var(--vscode-scrollbarSlider-background); border-radius: 2px; overflow: hidden; }
-        .score-fill { height: 100%; }
 
         .code-block {
             background-color: var(--vscode-textCodeBlock-background);
@@ -182,6 +177,10 @@
             border: none; padding: 3px 8px; border-radius: 4px; font-size: 11px; cursor: pointer;
         }
         .ghost-btn:hover { background-color: var(--vscode-button-secondaryHoverBackground); }
+        .ghost-btn:focus-visible, .link-btn:focus-visible, .chip:focus-visible, .search-btn:focus-visible {
+            outline: 1px solid var(--vscode-focusBorder); outline-offset: 1px;
+        }
+        .ghost-btn:disabled { opacity: 0.6; cursor: default; }
 
         .tok-keyword { color: var(--vscode-debugTokenExpression-name, #569CD6); }
         .tok-string { color: var(--vscode-debugTokenExpression-string, #CE9178); }
@@ -195,8 +194,21 @@
             border-radius: var(--card-radius);
             margin-bottom: 10px;
             font-size: 12px;
-            white-space: pre-wrap;
         }
+        .ai-explanation .explain-head {
+            display: flex; justify-content: space-between; align-items: baseline; gap: 8px;
+            font-size: 11px; color: var(--vscode-descriptionForeground); margin-bottom: 4px;
+        }
+        .ai-explanation .explain-head span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .ai-explanation .explain-body { white-space: pre-wrap; line-height: 1.45; }
+        .ai-explanation.pending .explain-body { color: var(--vscode-descriptionForeground); font-style: italic; }
+        .ai-explanation.failed { border-left-color: var(--bad); }
+        .card-explain { margin: 0; cursor: default; }
+        .close-btn {
+            background: transparent; border: none; cursor: pointer; padding: 0 2px;
+            color: var(--vscode-descriptionForeground); font-size: 14px; line-height: 1;
+        }
+        .close-btn:hover { color: var(--vscode-foreground); }
 
         .skeleton {
             background: var(--vscode-editor-background);
@@ -207,7 +219,8 @@
         }
 
         .empty { font-size: 12px; color: var(--vscode-descriptionForeground); }
-        .empty h4 { margin: 14px 0 6px; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; }
+        .empty h4 { margin: 14px 0 6px; font-size: 11px; font-weight: 600; }
+        .empty .hint { margin: 0 0 6px; }
         .chip {
             display: block;
             width: 100%;
@@ -222,6 +235,7 @@
             margin-bottom: 6px;
         }
         .chip:hover { border-color: var(--vscode-focusBorder); }
+        .chip { font-family: var(--vscode-editor-font-family); }
         .syntax { width: 100%; border-collapse: collapse; font-size: 11px; }
         .syntax td { padding: 2px 0; vertical-align: top; }
         .syntax code { font-family: var(--vscode-editor-font-family); white-space: nowrap; padding-right: 8px; }
@@ -254,10 +268,7 @@
     <input type="text" id="query-input" class="search-input"
            placeholder="Ask anything, or type a symbol name" autocomplete="off" spellcheck="false">
     <div class="search-controls">
-        <label class="checkbox-wrapper" title="Summarise the top results with a local LLM">
-            <input type="checkbox" id="chk-explain"> Explain
-        </label>
-        <button class="search-btn" id="btn-search">Search ↵</button>
+        <button class="search-btn" id="btn-search">Search</button>
     </div>
 
     <div id="filter-row" class="filter-row hidden"></div>
@@ -269,22 +280,28 @@
         <div class="progress-filename" id="prog-file"></div>
     </div>
 
-    <div id="meta" class="metadata-row hidden"><span id="meta-text"></span><span id="meta-hint"><kbd>↑</kbd><kbd>↓</kbd> <kbd>↵</kbd> open</span></div>
     <div id="explain"></div>
+    <div id="meta" class="metadata-row hidden">
+        <span id="meta-text"></span>
+        <button class="link-btn" id="btn-explain-results" title="Ask the local model to answer your query using the top results">Explain results</button>
+    </div>
     <ul id="results"></ul>
 
     <div id="empty" class="empty">
-        <h4>Try</h4>
-        <button class="chip" data-query="where do we handle authentication?">where do we handle authentication?</button>
-        <button class="chip" data-query="database writes -in:tests">database writes -in:tests</button>
-        <button class="chip" data-query="error logging kind:function">error logging kind:function</button>
+        <div id="suggest-section" class="hidden">
+            <h4>Try a search from this repo</h4>
+            <div id="suggestions"></div>
+        </div>
         <h4>Filters</h4>
         <table class="syntax">
             <tr><td><code>in:api</code></td><td>inside a folder or file starting with "api"</td></tr>
             <tr><td><code>-in:tests</code></td><td>exclude a folder</td></tr>
-            <tr><td><code>lang:py</code></td><td>py, ts, js, go, rs, java, cpp, md</td></tr>
-            <tr><td><code>kind:class</code></td><td>function, method, class, type, interface, text</td></tr>
+            <tr><td><code id="lang-example">lang:py</code></td><td id="lang-list">py, ts, js, go, rs, java, cpp, cuda, md</td></tr>
+            <tr><td><code>kind:class</code></td><td id="kind-list">function, method, class, type, interface, text</td></tr>
         </table>
+        <h4>Explain</h4>
+        <p class="hint">Click <strong>Explain</strong> on a result, or select code in the editor and run
+            <em>CodeLens: Explain Selection</em> from the right-click menu. No search needed.</p>
         <h4>Keys</h4>
         <table class="syntax">
             <tr><td><code>↑ ↓</code></td><td>select a result</td></tr>
@@ -299,7 +316,9 @@
         const $ = (id) => document.getElementById(id);
         const ui = {
             input: $('query-input'), btnSearch: $('btn-search'), btnReindex: $('btn-reindex'),
-            explain: $('chk-explain'), results: $('results'), meta: $('meta'), metaText: $('meta-text'),
+            results: $('results'), meta: $('meta'), metaText: $('meta-text'), btnExplainResults: $('btn-explain-results'),
+            suggestSection: $('suggest-section'), suggestions: $('suggestions'),
+            langExample: $('lang-example'), langList: $('lang-list'), kindList: $('kind-list'),
             empty: $('empty'), badge: $('chunk-badge'), dot: $('health-dot'), explainBox: $('explain'),
             notices: $('notices'), filters: $('filter-row'),
             progress: $('progress'), progPhase: $('prog-phase'), progBar: $('prog-bar'), progFile: $('prog-file'),
@@ -315,6 +334,10 @@
         let lastQuery = '';
         let indexing = false;
         let chunkCount = null;
+        let explainModel = 'the local model';
+        let ollamaNoticeDismissed = false;
+        let explainSeq = 0;
+        const explainTargets = new Map();   // reqId -> element that shows the answer
 
         // ---------------------------------------------------------------
         // Rendering helpers: everything from the backend is escaped
@@ -325,7 +348,8 @@
         const KEYWORDS = new Set(('function def class struct impl trait import from export if else elif for while ' +
             'return const let var await async type interface public private protected static fn pub mod use ' +
             'func package go defer match try except catch finally raise throw new self this lambda yield with ' +
-            'enum extends implements None null nil true false True False').split(' '));
+            'enum extends implements None null nil true false True False ' +
+            '__global__ __device__ __host__ __shared__ __constant__ template typename').split(' '));
         const HASH_COMMENTS = new Set(['python', 'yaml', 'toml', 'text']);
 
         function splitIdent(word) {
@@ -365,25 +389,99 @@
             return out + esc(code.slice(last));
         }
 
-        function scoreColor(v) {
-            if (v > 0.75) return 'var(--bar-green)';
-            if (v > 0.55) return 'var(--bar-amber)';
-            return 'var(--bar-red)';
-        }
+        const MATCH_LABEL = {
+            both: 'Matched by meaning and by keywords',
+            semantic: 'Matched by meaning',
+            keyword: 'Matched by keywords',
+            filter: 'Matched by filters',
+        };
 
+        /** A notice with optional buttons: action may be one {label, run} or a list of them. */
         function notice(text, cls = '', action) {
             const div = document.createElement('div');
             div.className = 'notice ' + cls;
             div.textContent = text;
-            if (action) {
-                const btn = document.createElement('button');
-                btn.className = 'ghost-btn';
-                btn.textContent = action.label;
-                btn.addEventListener('click', action.run);
-                div.appendChild(document.createElement('br'));
-                div.appendChild(btn);
+            const actions = action ? [].concat(action) : [];
+            if (actions.length) {
+                const row = document.createElement('div');
+                row.className = 'notice-actions';
+                actions.forEach(a => {
+                    const btn = document.createElement('button');
+                    btn.className = 'ghost-btn';
+                    btn.textContent = a.label;
+                    btn.addEventListener('click', a.run);
+                    row.appendChild(btn);
+                });
+                div.appendChild(row);
             }
             ui.notices.appendChild(div);
+        }
+
+        // ---------------------------------------------------------------
+        // Explanations: independent of search. A result card shows its own
+        // answer inline; results and editor selections use the box on top.
+        // ---------------------------------------------------------------
+        function explainBox(kind, title) {
+            const box = document.createElement('div');
+            box.className = 'ai-explanation pending';
+            box.dataset.kind = kind;
+            const head = document.createElement('div');
+            head.className = 'explain-head';
+            const label = document.createElement('span');
+            label.textContent = title || 'Explanation';
+            label.title = title || '';
+            const close = document.createElement('button');
+            close.className = 'close-btn';
+            close.title = 'Close';
+            close.setAttribute('aria-label', 'Close explanation');
+            close.textContent = '×';
+            const body = document.createElement('div');
+            body.className = 'explain-body';
+            body.textContent = `Explaining with ${explainModel}…`;
+            head.append(label, close);
+            box.append(head, body);
+            close.addEventListener('click', (e) => { e.stopPropagation(); box.remove(); });
+            return box;
+        }
+
+        function fillExplain(box, text, failed) {
+            box.classList.remove('pending');
+            box.classList.toggle('failed', !!failed);
+            box.querySelector('.explain-body').textContent = text;   // plain text: model output is never HTML
+        }
+
+        function explainCard(idx) {
+            const r = lastResults[idx];
+            const card = cards[idx];
+            if (!r || !card) return;
+            const existing = card.querySelector('.card-explain');
+            if (existing) { existing.remove(); return; }   // second click hides it
+            const box = explainBox('card', `What ${r.symbol_name || 'this code'} does`);
+            box.classList.add('card-explain');
+            card.querySelector('.code-block').after(box);
+            const reqId = `card-${++explainSeq}`;
+            explainTargets.set(reqId, box);
+            const text = lastQuery.replace(/(^|\s)-?(in|lang|kind):("[^"]*"?|\S*)/gi, ' ').trim();
+            vscode.postMessage({
+                type: 'explainSnippet', reqId, code: r.chunk_text, file: r.file_path,
+                symbol: r.symbol_name, language: r.language, query: text || undefined,
+            });
+        }
+
+        function explainResults() {
+            if (!lastQuery) return;
+            vscode.postMessage({ type: 'explainResults', reqId: `results-${++explainSeq}`, query: lastQuery });
+        }
+
+        /** Box on top for answers not tied to one card (results, editor selection). */
+        function topExplainBox(reqId, title) {
+            let box = explainTargets.get(reqId);
+            if (box && box.isConnected) return box;
+            ui.explainBox.innerHTML = '';
+            box = explainBox(reqId.startsWith('results-') ? 'results' : 'selection', title);
+            ui.explainBox.appendChild(box);
+            explainTargets.set(reqId, box);
+            return box;
         }
 
         function showEmptyState(show) {
@@ -392,7 +490,8 @@
 
         function clearResults() {
             ui.results.innerHTML = '';
-            ui.explainBox.innerHTML = '';
+            // An explanation of the old results is stale; one of an editor selection is not
+            ui.explainBox.querySelectorAll('[data-kind="results"]').forEach(b => b.remove());
             ui.meta.classList.add('hidden');
             ui.filters.classList.add('hidden');
             cards = [];
@@ -422,15 +521,9 @@
             (msg.warnings || []).forEach(w => notice(w));
             renderFilters(msg.filters || {});
 
-            if (msg.explain_text) {
-                const box = document.createElement('div');
-                box.className = 'ai-explanation';
-                box.textContent = msg.explain_text;   // plain text: model output is never HTML
-                ui.explainBox.appendChild(box);
-            }
-
             ui.meta.classList.remove('hidden');
-            ui.metaText.textContent = `${msg.results.length} result${msg.results.length === 1 ? '' : 's'} · ${msg.query_ms}ms`;
+            ui.metaText.textContent = `${msg.results.length} result${msg.results.length === 1 ? '' : 's'}, best first (${msg.query_ms} ms)`;
+            ui.btnExplainResults.classList.toggle('hidden', !msg.results.length);
             if (msg.total_indexed !== undefined) setChunkCount(msg.total_indexed);
 
             if (!msg.results.length) {
@@ -447,9 +540,6 @@
                 const slash = r.file_path.lastIndexOf('/');
                 const dir = slash >= 0 ? r.file_path.slice(0, slash + 1) : '';
                 const base = r.file_path.slice(slash + 1);
-                const score = typeof r.score === 'number' ? r.score : null;
-                const bar = score === null ? '' :
-                    `<div class="score-track" title="similarity ${score.toFixed(2)}"><div class="score-fill" style="width:${Math.round(score * 100)}%;background:${scoreColor(score)}"></div></div>${score.toFixed(2)}`;
                 li.innerHTML = `
                     <div class="card-header">
                         <span class="filename"><span class="dir">${esc(dir)}</span><span class="base">${esc(base)}</span></span>
@@ -458,21 +548,26 @@
                     <div class="symbol-row">
                         <span class="symbol-name" title="${esc(r.symbol_name)}">${esc(r.symbol_name)}</span>
                         <span class="tags">
-                            <span class="tag">${esc(r.kind)}</span>
-                            <span class="tag ${r.match === 'both' ? 'both' : ''}" title="found by ${esc(r.match)} search">${esc(r.match)}</span>
-                            ${bar}
+                            <span class="tag" title="${esc(MATCH_LABEL[r.match] || '')}">${esc(r.kind)}</span>
                         </span>
                     </div>
                     <pre class="code-block">${highlight(r.chunk_text, r.language, terms)}</pre>
                     <div class="card-actions">
-                        <button class="ghost-btn jump-btn">Open</button>
-                        <button class="ghost-btn copy-btn">Copy</button>
+                        <button class="ghost-btn jump-btn" title="Open the file at line ${Number(r.line_start)}">Open</button>
+                        <button class="ghost-btn explain-btn" title="Explain this code with ${esc(explainModel)}">Explain</button>
+                        <button class="ghost-btn copy-btn" title="Copy this code to the clipboard">Copy code</button>
                     </div>`;
                 li.addEventListener('click', (e) => {
-                    if (e.target.closest('.copy-btn')) {
+                    const copyBtn = e.target.closest('.copy-btn');
+                    if (copyBtn) {
                         vscode.postMessage({ type: 'copy', text: r.chunk_text });
+                        copyBtn.textContent = 'Copied';
+                        clearTimeout(copyBtn._reset);
+                        copyBtn._reset = setTimeout(() => { copyBtn.textContent = 'Copy code'; }, 1200);
                         return;
                     }
+                    if (e.target.closest('.explain-btn')) { explainCard(idx); return; }
+                    if (e.target.closest('.card-explain')) return;   // let people read and select the answer
                     if (window.getSelection().toString()) return;  // let people select code text
                     select(idx);
                     jump(r);
@@ -516,7 +611,7 @@
             vscode.setState({ query: ui.input.value });
             seq += 1;
             if (!live) showSkeleton();
-            vscode.postMessage({ type: 'query', text: q, explain: !live && ui.explain.checked, live, seq });
+            vscode.postMessage({ type: 'query', text: q, live, seq });
         }
 
         ui.input.addEventListener('input', () => {
@@ -565,13 +660,31 @@
         });
         ui.btnReindex.title = 'Index new and changed files (Shift+click: rebuild from scratch)';
 
-        document.querySelectorAll('.chip').forEach(chip => {
-            chip.addEventListener('click', () => {
-                ui.input.value = chip.dataset.query;
-                lastQuery = '';
-                sendQuery(false);
+        ui.btnExplainResults.addEventListener('click', explainResults);
+
+        /** Example searches come from the backend, built from this repo's own symbols. */
+        function renderSuggestions(msg) {
+            ui.suggestions.innerHTML = '';
+            (msg.suggestions || []).forEach(q => {
+                const chip = document.createElement('button');
+                chip.className = 'chip';
+                chip.textContent = q;
+                chip.addEventListener('click', () => {
+                    ui.input.value = q;
+                    lastQuery = '';
+                    sendQuery(false);
+                });
+                ui.suggestions.appendChild(chip);
             });
-        });
+            ui.suggestSection.classList.toggle('hidden', !(msg.suggestions || []).length);
+            const langs = (msg.languages || []).slice(0, 8);
+            if (langs.length) {
+                ui.langExample.textContent = 'lang:' + langs[0];
+                ui.langList.textContent = 'in this repo: ' + langs.join(', ');
+            }
+            const kinds = (msg.kinds || []).filter(k => k !== 'block').slice(0, 6);
+            if (kinds.length) ui.kindList.textContent = kinds.join(', ');
+        }
 
         // ---------------------------------------------------------------
         // Messages from the extension
@@ -592,6 +705,30 @@
                     ui.notices.innerHTML = '';
                     notice(msg.message, 'error');
                     break;
+
+                case 'suggestions':
+                    renderSuggestions(msg);
+                    break;
+
+                case 'explainStart': {
+                    const box = msg.title ? topExplainBox(msg.reqId, msg.title) : explainTargets.get(msg.reqId);
+                    if (box) box.querySelector('.explain-body').textContent = `Explaining with ${explainModel}…`;
+                    break;
+                }
+
+                case 'explainResult':
+                case 'explainError': {
+                    const box = msg.title ? topExplainBox(msg.reqId, msg.title) : explainTargets.get(msg.reqId);
+                    explainTargets.delete(msg.reqId);
+                    if (!box || !box.isConnected) break;   // closed, or its results were replaced
+                    if (msg.type === 'explainResult') {
+                        fillExplain(box, msg.text);
+                        box.querySelector('.explain-head span').title = `${msg.model}, ${msg.ms} ms`;
+                    } else {
+                        fillExplain(box, msg.message, true);
+                    }
+                    break;
+                }
 
                 case 'focus':
                     ui.input.focus();
@@ -641,12 +778,21 @@
                         break;
                     }
                     setChunkCount(msg.indexed_chunks);
+                    if (msg.explainModel) explainModel = msg.explainModel;
                     const partial = msg.embedded_chunks < msg.indexed_chunks;
                     ui.dot.className = 'status-dot ' + (!msg.ollama || partial ? 'amber' : 'green');
                     ui.dot.title = !msg.ollama
                         ? 'Ollama is offline: keyword search only'
                         : partial ? `${msg.embedded_chunks} of ${msg.indexed_chunks} chunks have vectors`
                         : `${msg.files} files · ${msg.vector_backend} · ${msg.embed_model}${msg.watching ? ' · watching' : ''}`;
+                    if (!msg.ollama && !ollamaNoticeDismissed) {
+                        notice('Ollama is not running, so search matches keywords only and Explain is off. ' +
+                               'Install Ollama with your package manager or from ollama.com, then run: ' +
+                               `ollama pull ${msg.embedModel || 'nomic-embed-text'}`, 'status-notice', [
+                            { label: 'Get Ollama', run: () => vscode.postMessage({ type: 'openExternal', url: 'https://ollama.com/download' }) },
+                            { label: 'Dismiss', run: () => { ollamaNoticeDismissed = true; ui.notices.querySelectorAll('.status-notice').forEach(n => n.remove()); } },
+                        ]);
+                    }
                     if (msg.ollama && !msg.modelPulled) {
                         notice(`The embedding model is not pulled. Run: ollama pull ${msg.embedModel}`, 'status-notice');
                     }

@@ -21,7 +21,8 @@ from pydantic import BaseModel, Field
 from backend.config import Settings
 from backend.db_client import get_db
 from backend.indexer import Indexer
-from backend.query import run_query
+from backend.query import ExplainError, explain_code, explain_results, run_query, search
+from backend.suggest import suggest
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger(__name__)
@@ -148,6 +149,17 @@ class IndexRequest(BaseModel):
     force_reindex: bool = False
 
 
+class ExplainRequest(BaseModel):
+    """Either `code` (explain this snippet) or `query` (search, then explain the top results)."""
+    code: Optional[str] = Field(None, max_length=200_000)
+    file_path: str = ""
+    symbol_name: str = ""
+    language: str = ""
+    query: Optional[str] = None
+    repo_path: Optional[str] = None
+    top_k: int = Field(5, ge=1, le=20)
+
+
 class QueryRequest(BaseModel):
     query: str
     top_k: int = Field(8, ge=1, le=50)
@@ -232,6 +244,35 @@ async def api_query(req: QueryRequest, request: Request):
     return data
 
 
+@app.post("/explain")
+async def api_explain(req: ExplainRequest):
+    """Explain code with the local LLM. Independent of search: send a snippet and get
+    an explanation. With only `query`, the top search results are explained instead."""
+    start = time.time()
+    try:
+        if req.code and req.code.strip():
+            text = await asyncio.to_thread(explain_code, req.code, req.file_path, req.symbol_name,
+                                           req.language, req.query)
+        elif req.query and req.query.strip():
+            repo = _resolve_repo(req.repo_path)
+            found = await asyncio.to_thread(search, req.query, repo, req.top_k)
+            if not found["results"]:
+                raise HTTPException(status_code=404, detail="No results to explain")
+            text = await asyncio.to_thread(explain_results, req.query, found["results"])
+        else:
+            raise HTTPException(status_code=400, detail="Send `code` or `query`")
+    except ExplainError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    return {"explain_text": text, "model": Settings.EXPLAIN_MODEL, "ms": int((time.time() - start) * 1000)}
+
+
+@app.get("/suggestions")
+async def api_suggestions(repo_path: Optional[str] = None):
+    """Example searches built from the symbols indexed for this repo."""
+    repo = _resolve_repo(repo_path)
+    return await asyncio.to_thread(suggest, repo)
+
+
 @app.get("/status")
 async def api_status(repo_path: Optional[str] = None):
     repo = _resolve_repo(repo_path)
@@ -268,6 +309,7 @@ async def api_health():
         "embed_model": Settings.EMBED_MODEL,
         "embed_model_pulled": pulled,
         "ollama_error": err,
+        "explain_model": Settings.EXPLAIN_MODEL,
         "db": db_ok,
         "vectorai": db_ok,  # legacy field
         "vector_backend": backend,

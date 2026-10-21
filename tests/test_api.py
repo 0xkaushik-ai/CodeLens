@@ -1,22 +1,7 @@
 import json
 import os
 
-import pytest
-from fastapi.testclient import TestClient
-
-from backend import main
 from tests.conftest import write
-
-
-@pytest.fixture
-def client(db, embedder, tmp_path, monkeypatch):
-    monkeypatch.setattr(main, "REPOS_FILE", str(tmp_path / "repos.json"))
-    monkeypatch.setattr(main, "LEGACY_SIDECAR", str(tmp_path / "nope.json"))
-    monkeypatch.setattr(main, "_indexers", {})
-    with TestClient(main.app) as c:
-        yield c
-    for ix in main._indexers.values():
-        ix.stop_watchdog()
 
 
 def test_rejects_foreign_hosts_and_browser_origins(client):

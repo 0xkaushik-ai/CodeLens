@@ -49,6 +49,32 @@ export async function activate(context: vscode.ExtensionContext) {
             const text = editor?.document.getText(editor.selection).trim();
             if (text) { provider.search(text.slice(0, 2000)); }
         }),
+        vscode.commands.registerCommand('codelens.explainSelection', () => {
+            const editor = vscode.window.activeTextEditor;
+            if (!editor) { return; }
+            // No selection: explain the line the cursor is on, with a little context
+            const range = editor.selection.isEmpty
+                ? editor.document.lineAt(editor.selection.active.line).range
+                : editor.selection;
+            const code = editor.document.getText(range).trim();
+            if (!code) {
+                vscode.window.showInformationMessage('CodeLens: select some code to explain.');
+                return;
+            }
+            const folder = vscode.workspace.getWorkspaceFolder(editor.document.uri);
+            const file = folder ? path.relative(folder.uri.fsPath, editor.document.uri.fsPath)
+                : path.basename(editor.document.uri.fsPath);
+            provider.explainSelection(code.slice(0, 12000), file.split(path.sep).join('/'), editor.document.languageId);
+        }),
+        vscode.commands.registerCommand('codelens.setupBackend', async () => {
+            const dir = resolveBackendDir(context);
+            if (!dir) { return; }
+            if (await setUpManagedEnv(context, dir)) {
+                stopBackend();
+                await ensureBackend(context, client);
+                provider.refreshStatus();
+            }
+        }),
         vscode.commands.registerCommand('codelens.restartBackend', async () => {
             stopBackend();
             await ensureBackend(context, client);
@@ -70,18 +96,99 @@ function resolveBackendDir(context: vscode.ExtensionContext): string | undefined
     return candidates.find(dir => fs.existsSync(path.join(dir, 'backend', 'main.py')));
 }
 
-function pythonCandidates(backendDir: string): string[] {
-    const configured = config().get<string>('pythonPath', '');
-    const venv = process.platform === 'win32'
-        ? path.join(backendDir, '.venv', 'Scripts', 'python.exe')
-        : path.join(backendDir, '.venv', 'bin', 'python');
-    return [configured, fs.existsSync(venv) ? venv : '', 'python3', 'python'].filter(Boolean);
+function venvPython(venvDir: string): string {
+    return process.platform === 'win32'
+        ? path.join(venvDir, 'Scripts', 'python.exe')
+        : path.join(venvDir, 'bin', 'python');
 }
 
-function findPython(backendDir: string): string | undefined {
-    return pythonCandidates(backendDir).find(
+/** The private environment CodeLens creates for itself (survives extension updates). */
+function managedVenvDir(context: vscode.ExtensionContext): string {
+    return path.join(context.globalStorageUri.fsPath, 'venv');
+}
+
+function pythonCandidates(context: vscode.ExtensionContext, backendDir: string): string[] {
+    const configured = config().get<string>('pythonPath', '');
+    const local = venvPython(path.join(backendDir, '.venv'));
+    const managed = venvPython(managedVenvDir(context));
+    return [configured, fs.existsSync(local) ? local : '', fs.existsSync(managed) ? managed : '',
+        'python3', 'python'].filter(Boolean);
+}
+
+function findPython(context: vscode.ExtensionContext, backendDir: string): string | undefined {
+    return pythonCandidates(context, backendDir).find(
         p => spawnSync(p, ['-c', REQUIRED_MODULES], { cwd: backendDir, timeout: 20000 }).status === 0,
     );
+}
+
+/** A Python 3.10+ to create the private environment with. */
+function findBasePython(): string[] | undefined {
+    const candidates: string[][] = process.platform === 'win32'
+        ? [['py', '-3'], ['python'], ['python3']]
+        : [['python3.12'], ['python3.11'], ['python3.10'], ['python3'], ['python']];
+    return candidates.find(([cmd, ...args]) => spawnSync(cmd, [...args, '-c',
+        'import sys, venv; sys.exit(0 if sys.version_info >= (3, 10) else 1)'], { timeout: 10000 }).status === 0);
+}
+
+/** Backend dependencies, read from the bundled pyproject.toml so they are listed once. */
+function backendRequirements(backendDir: string): string[] {
+    const toml = fs.readFileSync(path.join(backendDir, 'pyproject.toml'), 'utf-8');
+    const block = /^dependencies\s*=\s*\[([\s\S]*?)^\]/m.exec(toml)?.[1] ?? '';
+    return [...block.matchAll(/^\s*"([^"]+)"/gm)].map(m => m[1]);
+}
+
+function run(cmd: string, args: string[], token: vscode.CancellationToken): Promise<void> {
+    return new Promise((resolve, reject) => {
+        output.appendLine(`$ ${cmd} ${args.join(' ')}`);
+        const child = spawn(cmd, args);
+        token.onCancellationRequested(() => child.kill());
+        child.stdout?.on('data', d => output.append(d.toString()));
+        child.stderr?.on('data', d => output.append(d.toString()));
+        child.on('error', reject);
+        child.on('exit', code => code === 0 ? resolve()
+            : reject(new Error(token.isCancellationRequested ? 'Cancelled' : `${cmd} exited with code ${code}`)));
+    });
+}
+
+/**
+ * Create a private virtualenv in the extension's storage and install the backend's
+ * dependencies into it, so installing the extension is the only manual step.
+ * Ollama is not installed: it is optional and left to the user.
+ */
+async function setUpManagedEnv(context: vscode.ExtensionContext, backendDir: string): Promise<boolean> {
+    const base = findBasePython();
+    if (!base) {
+        const choice = await vscode.window.showErrorMessage(
+            'CodeLens needs Python 3.10 or newer to run its local search engine. Install it, then try again.',
+            'Download Python');
+        if (choice) { vscode.env.openExternal(vscode.Uri.parse('https://www.python.org/downloads/')); }
+        return false;
+    }
+    const venvDir = managedVenvDir(context);
+    const python = venvPython(venvDir);
+    output.show(true);
+    try {
+        await vscode.window.withProgress({
+            location: vscode.ProgressLocation.Notification,
+            title: 'CodeLens: setting up the search engine',
+            cancellable: true,
+        }, async (progress, token) => {
+            fs.mkdirSync(context.globalStorageUri.fsPath, { recursive: true });
+            progress.report({ message: 'creating a private Python environment' });
+            await run(base[0], [...base.slice(1), '-m', 'venv', venvDir], token);
+            progress.report({ message: 'installing packages (about a minute)' });
+            await run(python, ['-m', 'pip', 'install', '--disable-pip-version-check', '--upgrade', 'pip'], token);
+            await run(python, ['-m', 'pip', 'install', '--disable-pip-version-check',
+                ...backendRequirements(backendDir)], token);
+        });
+        output.appendLine(`CodeLens environment ready: ${python}`);
+        return true;
+    } catch (e: any) {
+        output.appendLine(`Setup failed: ${e?.message ?? e}`);
+        vscode.window.showErrorMessage(`CodeLens setup failed: ${e?.message ?? e}`, 'Show Logs')
+            .then(c => { if (c) { output.show(); } });
+        return false;
+    }
 }
 
 async function ensureBackend(context: vscode.ExtensionContext, client: CodeLensClient): Promise<void> {
@@ -103,18 +210,24 @@ async function ensureBackend(context: vscode.ExtensionContext, client: CodeLensC
         return;
     }
 
-    const python = findPython(backendDir);
+    let python = findPython(context, backendDir);
     if (!python) {
-        const setup = `cd "${backendDir}" && python3 -m venv .venv && .venv/bin/pip install -e .`;
-        output.appendLine(`No Python with the backend dependencies found. Set it up with:\n  ${setup}`);
-        const choice = await vscode.window.showErrorMessage(
-            'CodeLens: no Python environment with the backend dependencies. Create one, or set "codelens.pythonPath".',
-            'Copy Setup Command', 'Open Settings');
-        if (choice === 'Copy Setup Command') { vscode.env.clipboard.writeText(setup); }
-        if (choice === 'Open Settings') {
+        output.appendLine('No Python environment with the backend dependencies was found.');
+        const choice = await vscode.window.showInformationMessage(
+            'CodeLens needs to install its local search engine (Python packages, about 150 MB) ' +
+            'into a private environment. Nothing is installed system-wide.',
+            'Set Up', 'Use My Own Python');
+        if (choice === 'Use My Own Python') {
             vscode.commands.executeCommand('workbench.action.openSettings', 'codelens.pythonPath');
+            return;
         }
-        return;
+        if (choice !== 'Set Up' || !(await setUpManagedEnv(context, backendDir))) { return; }
+        python = findPython(context, backendDir);
+        if (!python) {
+            vscode.window.showErrorMessage('CodeLens: the environment was created but the backend still cannot ' +
+                'load its packages.', 'Show Logs').then(c => { if (c) { output.show(); } });
+            return;
+        }
     }
 
     const port = String(config().get<number>('port', 8000));
@@ -124,6 +237,7 @@ async function ensureBackend(context: vscode.ExtensionContext, client: CodeLensC
         cwd: backendDir,
         env: {
             ...process.env,
+            ...backendEnv(),
             // The Ollama desktop app keeps its CLI here on macOS
             PATH: `/Applications/Ollama.app/Contents/Resources${path.delimiter}${process.env.PATH ?? ''}`,
         },
@@ -144,6 +258,16 @@ async function ensureBackend(context: vscode.ExtensionContext, client: CodeLensC
         if (await client.health(1000)) { return; }
         await new Promise(r => setTimeout(r, 500));
     }
+}
+
+/** Settings forwarded to a backend the extension starts itself. */
+function backendEnv(): Record<string, string> {
+    const env: Record<string, string> = {};
+    const host = config().get<string>('ollamaHost', '');
+    const model = config().get<string>('explainModel', '');
+    if (host) { env.OLLAMA_HOST = host; }
+    if (model) { env.EXPLAIN_MODEL = model; }
+    return env;
 }
 
 async function pollStatus(client: CodeLensClient, provider: SearchPanelProvider) {

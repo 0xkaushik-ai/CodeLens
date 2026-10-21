@@ -1,147 +1,104 @@
 #!/bin/bash
 # ============================================================
-# CodeLens — One-Command Setup
-# Works on macOS (Intel + Apple Silicon) & Linux (ARM/x86)
+# CodeLens — developer setup
+#
+# Creates .venv with the backend and builds the VS Code extension.
+# It does NOT install Ollama: that is optional and up to you (use your package
+# manager, Homebrew, or ollama.com). Without Ollama, keyword search works and
+# semantic search / Explain are off until you install it.
+#
+#   ./setup.sh                 # backend + extension
+#   ./setup.sh --no-extension  # backend only
 # ============================================================
 set -e
+cd "$(dirname "$0")"
+
+BUILD_EXTENSION=1
+for arg in "$@"; do
+    case "$arg" in
+        --no-extension) BUILD_EXTENSION=0 ;;
+        -h|--help) sed -n '2,13p' "$0"; exit 0 ;;
+        *) echo "Unknown option: $arg"; exit 2 ;;
+    esac
+done
 
 PYTHON=""
-OLLAMA_BIN=""
+OLLAMA_HOST="${OLLAMA_HOST:-http://localhost:11434}"
+EMBED_MODEL="${EMBED_MODEL:-nomic-embed-text}"
 
-# ---------- Colours ----------
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; NC='\033[0m'
 ok()   { echo -e "${GREEN}✅ $*${NC}"; }
 warn() { echo -e "${YELLOW}⚠️  $*${NC}"; }
 fail() { echo -e "${RED}❌ $*${NC}"; exit 1; }
 
 echo ""
-echo "  ██████╗ ██████╗ ██████╗ ███████╗██╗     ███████╗███╗   ██╗███████╗"
-echo "  ██╔════╝██╔═══██╗██╔══██╗██╔════╝██║     ██╔════╝████╗  ██║██╔════╝"
-echo "  ██║     ██║   ██║██║  ██║█████╗  ██║     █████╗  ██╔██╗ ██║███████╗"
-echo "  ██║     ██║   ██║██║  ██║██╔══╝  ██║     ██╔══╝  ██║╚██╗██║╚════██║"
-echo "  ╚██████╗╚██████╔╝██████╔╝███████╗███████╗███████╗██║ ╚████║███████║"
-echo "   ╚═════╝ ╚═════╝ ╚═════╝ ╚══════╝╚══════╝╚══════╝╚═╝  ╚═══╝╚══════╝"
-echo ""
-echo "  Offline Semantic Codebase Search • SQLite + sqlite-vec + Ollama"
+echo "  CodeLens setup: offline semantic + keyword code search"
 echo ""
 
 # ────────────────────────────────────────────────────────────
-# 1. Detect Python 3.10+
+# 1. Python 3.10+
 # ────────────────────────────────────────────────────────────
-echo "▶ Detecting Python 3.10+..."
-for py in python3.12 python3.11 python3.10 python3; do
-    if command -v "$py" &>/dev/null; then
-        VER=$("$py" -c "import sys; print(sys.version_info >= (3, 10))" 2>/dev/null)
-        if [ "$VER" = "True" ]; then
-            PYTHON="$py"
-            ok "Found: $py ($($py --version))"
-            break
-        fi
+echo "▶ Looking for Python 3.10+..."
+for py in python3.13 python3.12 python3.11 python3.10 python3; do
+    if command -v "$py" &>/dev/null && \
+       [ "$("$py" -c 'import sys; print(sys.version_info >= (3, 10))' 2>/dev/null)" = "True" ]; then
+        PYTHON="$py"; ok "Found $($py --version)"; break
     fi
 done
-
-# Fallback: check /usr/local/bin explicitly (common on macOS)
-if [ -z "$PYTHON" ]; then
-    for py in /usr/local/bin/python3.11 /usr/local/bin/python3.12 /usr/local/bin/python3.10; do
-        if [ -x "$py" ]; then
-            PYTHON="$py"; ok "Found: $py ($($py --version))"; break
-        fi
-    done
-fi
-
-[ -z "$PYTHON" ] && fail "Python 3.10+ not found. Install from https://python.org"
+[ -z "$PYTHON" ] && fail "Python 3.10+ not found. Install it with your package manager or from https://python.org"
 
 # ────────────────────────────────────────────────────────────
-# 2. Install / start Ollama
-# ────────────────────────────────────────────────────────────
-echo "▶ Checking Ollama..."
-OLLAMA_CANDIDATES=(
-    "ollama"
-    "/Applications/Ollama.app/Contents/Resources/ollama"
-    "/usr/local/bin/ollama"
-    "$HOME/.local/bin/ollama"
-)
-for b in "${OLLAMA_CANDIDATES[@]}"; do
-    if command -v "$b" &>/dev/null || [ -x "$b" ]; then
-        OLLAMA_BIN="$b"; ok "Ollama found: $b"; break
-    fi
-done
-
-if [ -z "$OLLAMA_BIN" ]; then
-    warn "Ollama not found — installing..."
-    if [[ "$OSTYPE" == "darwin"* ]]; then
-        curl -fsSL https://ollama.com/install.sh | sh || fail "Ollama install failed"
-        OLLAMA_BIN="/Applications/Ollama.app/Contents/Resources/ollama"
-    else
-        curl -fsSL https://ollama.com/install.sh | sh || fail "Ollama install failed"
-        OLLAMA_BIN="ollama"
-    fi
-fi
-
-# Add Ollama to PATH for this session
-OLLAMA_DIR=$(dirname "$OLLAMA_BIN")
-export PATH="$OLLAMA_DIR:$PATH"
-
-# Start Ollama serve if not already running
-if ! curl -s http://localhost:11434/api/tags >/dev/null 2>&1; then
-    echo "▶ Starting Ollama service..."
-    "$OLLAMA_BIN" serve >/tmp/ollama-codelens.log 2>&1 &
-    sleep 4
-fi
-
-if curl -s http://localhost:11434/api/tags >/dev/null 2>&1; then
-    ok "Ollama service running"
-else
-    fail "Ollama failed to start. Check /tmp/ollama-codelens.log"
-fi
-
-# ────────────────────────────────────────────────────────────
-# 3. Pull embedding model
-# ────────────────────────────────────────────────────────────
-echo "▶ Pulling nomic-embed-text (~274 MB, one-time)..."
-"$OLLAMA_BIN" pull nomic-embed-text
-ok "nomic-embed-text ready"
-
-# ────────────────────────────────────────────────────────────
-# 4. Python dependencies
+# 2. Backend in .venv
 # ────────────────────────────────────────────────────────────
 echo "▶ Creating .venv and installing the backend..."
-cd "$(dirname "$0")"
-"$PYTHON" -m venv .venv || fail "Could not create a virtualenv with $PYTHON"
+"$PYTHON" -m venv .venv || fail "Could not create a virtualenv with $PYTHON (on Debian/Ubuntu: apt install python3-venv)"
 ./.venv/bin/python -m pip install --quiet --upgrade pip
 ./.venv/bin/python -m pip install --quiet -e ".[dev]"
-ok "Python dependencies installed"
+ok "Backend installed in .venv"
 
 # ────────────────────────────────────────────────────────────
-# 6. VS Code extension (optional — skip if npm missing)
+# 3. Ollama: detected, never installed
 # ────────────────────────────────────────────────────────────
-if command -v npm &>/dev/null; then
-    echo "▶ Building VS Code extension..."
-    npm install --silent
-    npm run build 2>/dev/null || npx tsc -p ./ 2>/dev/null || warn "Extension build failed — install TypeScript with: npm install -g typescript"
-    ok "VS Code extension built"
+echo "▶ Checking for Ollama (optional)..."
+if curl -fs "$OLLAMA_HOST/api/tags" >/dev/null 2>&1; then
+    ok "Ollama is running at $OLLAMA_HOST"
+    if curl -fs "$OLLAMA_HOST/api/tags" | grep -q "\"$EMBED_MODEL"; then
+        ok "$EMBED_MODEL is already pulled"
+    elif command -v ollama &>/dev/null; then
+        echo "▶ Pulling $EMBED_MODEL (~274 MB, one time)..."
+        ollama pull "$EMBED_MODEL" && ok "$EMBED_MODEL ready" || warn "Pull failed; run: ollama pull $EMBED_MODEL"
+    else
+        warn "Run this to enable semantic search: ollama pull $EMBED_MODEL"
+    fi
+elif command -v ollama &>/dev/null; then
+    warn "Ollama is installed but not running. Start it (ollama serve, or your service manager),"
+    warn "then run: ollama pull $EMBED_MODEL"
 else
-    warn "npm not found — skipping extension build (install Node.js to enable)"
+    warn "Ollama not found. That's fine: keyword search works without it."
+    echo "   For semantic search and Explain, install Ollama your preferred way, for example:"
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+        echo "     brew install ollama         (or the app from https://ollama.com/download)"
+    else
+        echo "     your package manager (pacman -S ollama, nix, ...), or https://ollama.com/download"
+    fi
+    echo "   then: ollama pull $EMBED_MODEL"
 fi
 
 # ────────────────────────────────────────────────────────────
-# Summary
+# 4. VS Code extension
 # ────────────────────────────────────────────────────────────
+if [ "$BUILD_EXTENSION" = "1" ]; then
+    if command -v npm &>/dev/null; then
+        echo "▶ Building the VS Code extension..."
+        npm install --silent
+        npm run build && ok "Extension built (press F5 in VS Code, or: npm run package)" \
+            || warn "Extension build failed; see the output above"
+    else
+        warn "npm not found, skipping the extension build (install Node.js 18+ to build it)"
+    fi
+fi
+
 echo ""
-echo "  ════════════════════════════════════════════════════════"
-ok "  CodeLens is ready!"
-echo "  ════════════════════════════════════════════════════════"
-echo ""
-echo "  Start the backend:"
-echo "    ./start.sh"
-echo ""
-echo "  Index a repo:"
-echo "    curl -X POST http://localhost:8000/index \\"
-echo "         -H 'Content-Type: application/json' \\"
-echo "         -d '{\"repo_path\": \"/path/to/your/repo\"}'"
-echo ""
-echo "  Query it:"
-echo "    curl -X POST http://localhost:8000/query \\"
-echo "         -H 'Content-Type: application/json' \\"
-echo "         -d '{\"query\": \"where does authentication happen?\", \"top_k\": 5}'"
+ok "CodeLens is ready. Start the backend with: ./start.sh"
+echo "   (The VS Code extension starts it on its own if it isn't running.)"
 echo ""

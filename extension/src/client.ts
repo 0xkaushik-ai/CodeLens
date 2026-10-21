@@ -1,5 +1,6 @@
 import type {
-    HealthResponse, IndexEvent, QueryRequest, QueryResponse, StatusResponse,
+    ExplainRequest, ExplainResponse, HealthResponse, IndexEvent, QueryRequest, QueryResponse,
+    StatusResponse, SuggestionsResponse,
 } from '../../shared/types';
 
 export class BackendError extends Error {
@@ -46,6 +47,19 @@ export class CodeLensClient {
         return this.request<QueryResponse>('/query', {
             method: 'POST', body: JSON.stringify(body), signal,
         }, body.explain ? 180000 : 30000);
+    }
+
+    /** Explain a snippet (or the top results of a query) with the local LLM, which can be slow. */
+    explain(body: ExplainRequest, signal?: AbortSignal): Promise<ExplainResponse> {
+        return this.request<ExplainResponse>('/explain', {
+            method: 'POST', body: JSON.stringify(body), signal,
+        }, 180000);
+    }
+
+    /** Example searches built from what is indexed for this repo. */
+    suggestions(repo?: string): Promise<SuggestionsResponse> {
+        const q = repo ? `?repo_path=${encodeURIComponent(repo)}` : '';
+        return this.request<SuggestionsResponse>(`/suggestions${q}`, {}, 5000);
     }
 
     /** Stream indexing events (server-sent events). */

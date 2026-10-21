@@ -48,6 +48,31 @@ export interface QueryResponse {
     total_indexed: number;
 }
 
+/** Explain code with the local LLM. Send `code` (no search), or `query` to explain the top results. */
+export interface ExplainRequest {
+    code?: string;
+    file_path?: string;
+    symbol_name?: string;
+    language?: string;
+    query?: string;
+    repo_path?: string;
+    top_k?: number;
+}
+
+export interface ExplainResponse {
+    explain_text: string;
+    model: string;
+    ms: number;
+}
+
+/** Example searches built from the symbols indexed for a repo. */
+export interface SuggestionsResponse {
+    suggestions: string[];
+    /** Short `lang:` names present in the repo, most common first. */
+    languages: string[];
+    kinds: string[];
+}
+
 export type IndexEvent =
     | { type: 'start'; repo: string }
     | { type: 'progress'; phase: 'scan' | 'embed'; done: number; total: number; file: string; chunks?: number }
@@ -81,6 +106,7 @@ export interface HealthResponse {
     embed_model: string;
     embed_model_pulled: boolean;
     ollama_error: string | null;
+    explain_model?: string;
     db: boolean;
     vector_backend: string;
 }

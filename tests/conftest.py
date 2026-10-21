@@ -76,3 +76,18 @@ def repo(tmp_path):
     root.mkdir()
     subprocess.run(["git", "init", "-q", str(root)], check=True)
     return str(root)
+
+
+@pytest.fixture
+def client(db, embedder, tmp_path, monkeypatch):
+    """FastAPI test client with an isolated repo registry."""
+    from fastapi.testclient import TestClient
+    from backend import main
+
+    monkeypatch.setattr(main, "REPOS_FILE", str(tmp_path / "repos.json"))
+    monkeypatch.setattr(main, "LEGACY_SIDECAR", str(tmp_path / "nope.json"))
+    monkeypatch.setattr(main, "_indexers", {})
+    with TestClient(main.app) as c:
+        yield c
+    for ix in main._indexers.values():
+        ix.stop_watchdog()

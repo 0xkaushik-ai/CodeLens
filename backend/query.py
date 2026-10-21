@@ -38,6 +38,7 @@ LANG_ALIASES: dict[str, list[str]] = {
     "rs": ["rust"], "rust": ["rust"],
     "java": ["java"],
     "c": ["cpp"], "cc": ["cpp"], "cpp": ["cpp"], "c++": ["cpp"], "h": ["cpp"],
+    "cu": ["cuda"], "cuda": ["cuda"], "cuh": ["cuda"],
     "md": ["markdown"], "markdown": ["markdown"], "docs": ["markdown", "text"],
     "yaml": ["yaml"], "yml": ["yaml"], "toml": ["toml"], "txt": ["text"], "text": ["text"],
 }
@@ -229,7 +230,44 @@ def search(query: str, repo: Optional[str] = None, top_k: int = 10,
             "warnings": warnings}
 
 
-def explain(query: str, results: list[dict]) -> str:
+class ExplainError(RuntimeError):
+    """The local LLM could not answer (Ollama down, model not pulled...)."""
+
+
+def _chat(messages: list[dict]) -> str:
+    try:
+        resp = Client(host=Settings.OLLAMA_HOST, timeout=120).chat(
+            model=Settings.EXPLAIN_MODEL, messages=messages)
+        return resp.message.content.strip()
+    except Exception as e:
+        logger.warning(f"Explain failed: {e}")
+        msg = str(e).lower()
+        if "not found" in msg or "pull" in msg:
+            raise ExplainError(f"The model {Settings.EXPLAIN_MODEL} is not pulled. "
+                               f"Run: ollama pull {Settings.EXPLAIN_MODEL}") from e
+        raise ExplainError(f"Explain needs Ollama running with {Settings.EXPLAIN_MODEL} "
+                           f"(ollama pull {Settings.EXPLAIN_MODEL}). Error: {e}") from e
+
+
+def explain_code(code: str, file_path: str = "", symbol_name: str = "", language: str = "",
+                 question: Optional[str] = None) -> str:
+    """Explain one piece of code on its own: no search involved."""
+    where = " ".join(p for p in (file_path, f"({symbol_name})" if symbol_name else "") if p)
+    lang = f"{language} " if language and language not in {"text", "block"} else ""
+    ask = f"\n\nThe user was looking for: {question}. Say how this code relates to that." \
+        if question else ""
+    messages = [
+        {"role": "system", "content": "You explain code to a developer who is reading it for the first "
+                                      "time. In 3-5 sentences say what it does, its inputs and outputs, "
+                                      "and anything surprising. Plain text, no markdown headings."},
+        {"role": "user", "content": f"{lang}code{' from ' + where if where else ''}:\n\n"
+                                    f"{code[:6000]}{ask}"},
+    ]
+    return _chat(messages)
+
+
+def explain_results(query: str, results: list[dict]) -> str:
+    """Answer a question using the top search results as context."""
     context = "\n\n".join(
         f"--- {r['file_path']}:{r['line_start']}-{r['line_end']} ({r['symbol_name']})\n{r['chunk_text'][:2000]}"
         for r in results[:3])
@@ -238,14 +276,15 @@ def explain(query: str, results: list[dict]) -> str:
                                       "Reference specific function names and files. Plain text only."},
         {"role": "user", "content": f"Codebase context:\n{context}\n\nQuestion: {query}"},
     ]
+    return _chat(messages)
+
+
+def explain(query: str, results: list[dict]) -> str:
+    """Back-compat: explain_results that returns the error text instead of raising."""
     try:
-        resp = Client(host=Settings.OLLAMA_HOST, timeout=120).chat(
-            model=Settings.EXPLAIN_MODEL, messages=messages)
-        return resp.message.content
-    except Exception as e:
-        logger.warning(f"Explain failed: {e}")
-        return (f"Explain mode unavailable. Is the model pulled? "
-                f"Run: ollama pull {Settings.EXPLAIN_MODEL}")
+        return explain_results(query, results)
+    except ExplainError as e:
+        return f"Explain mode unavailable. {e}"
 
 
 def search_with_explain(query: str, repo: Optional[str] = None, top_k: int = 10,
