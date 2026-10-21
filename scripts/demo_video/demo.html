@@ -12,6 +12,7 @@
     --green: #3fb950; --amber: #d29922; --red: #f85149;
     --side: #181818; --editor: #1f1f1f; --border: #2b2b2b; --fg: #cccccc; --dim: #8b8b8b;
     --input: #313131; --badge: #4d4d4d; --mark: #7a4a1d; --code-bg: #262626;
+    --btn-bg: #0e639c; --btn2-bg: #3a3d41; --ok: #3fb950; --warn: #d29922; --bad: #f85149;
   }
   html, body { width: 1920px; height: 1080px; overflow: hidden; background: var(--bg); color: #fff; font-family: var(--ui); }
   #bg { position: absolute; inset: 0; background: radial-gradient(1200px 700px at 50% -10%, #17324d 0%, var(--bg) 60%) no-repeat; }
@@ -41,49 +42,64 @@
   .statusbar .right { margin-left: auto; }
 
   /* ---------- sidebar (mirrors extension/media/panel.html) ---------- */
-  .sidebar { background: var(--side); border-right: 1px solid var(--border); padding: 18px 20px; overflow: hidden; font-size: 15px; color: var(--fg); position: relative; }
-  .side-title { font-size: 12px; letter-spacing: .08em; color: var(--dim); margin-bottom: 14px; }
-  .header { display: flex; justify-content: space-between; align-items: center; font-size: 14px; color: var(--dim); margin-bottom: 14px; }
-  .header-left { display: flex; gap: 8px; align-items: center; }
-  .header-left strong { color: var(--fg); }
-  .status-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--green); }
-  .link { color: var(--accent); font-size: 14px; }
-  .search-input { width: 100%; background: var(--input); border: 1px solid #0078d4; color: #eee; border-radius: 5px; padding: 11px 13px; font-size: 18px; height: 46px; white-space: pre; overflow: hidden; }
-  .caret { display: inline-block; width: 2px; height: 22px; background: #fff; vertical-align: -4px; margin-left: 1px; }
+  .sidebar { background: var(--side); border-right: 1px solid var(--border); padding: 14px 16px; overflow: hidden; font-size: 13px; color: var(--fg); position: relative; }
+
+  /* header row */
+  .hdr { display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: var(--dim); margin-bottom: 12px; }
+  .hdr-left { display: flex; gap: 6px; align-items: center; }
+  .hdr-left strong { color: var(--fg); font-size: 13px; }
+  .status-dot { width: 9px; height: 9px; border-radius: 50%; }
+  .link { color: var(--accent); font-size: 13px; cursor: pointer; }
+
+  /* search box */
+  .search-input { width: 100%; background: var(--input); border: 1px solid #0078d4; color: #eee; border-radius: 4px; padding: 0 11px; font-size: 15px; height: 40px; display: flex; align-items: center; white-space: pre; overflow: hidden; margin-bottom: 8px; }
+  .caret { display: inline-block; width: 2px; height: 18px; background: #fff; margin-left: 1px; flex-shrink: 0; }
   .placeholder { color: #777; }
-  .controls { display: flex; justify-content: space-between; align-items: center; margin: 11px 0 12px; font-size: 14px; color: var(--dim); }
-  .btn { background: #0078d4; color: #fff; border-radius: 4px; padding: 5px 12px; font-size: 14px; }
-  .chk { display: inline-block; width: 15px; height: 15px; border: 1px solid #666; border-radius: 3px; vertical-align: -2px; margin-right: 6px; }
-  .filters { display: flex; gap: 6px; margin-bottom: 10px; min-height: 0; }
-  .pill { font-family: var(--mono); font-size: 13px; padding: 2px 9px; border-radius: 10px; background: #0e4f86; color: #e6f2ff; }
-  .meta { font-size: 13px; color: var(--dim); display: flex; justify-content: space-between; margin-bottom: 10px; }
-  kbd { font-family: var(--mono); font-size: 11px; border: 1px solid #444; border-radius: 3px; padding: 0 4px; margin-left: 2px; }
-  .cards { display: flex; flex-direction: column; gap: 12px; }
-  .card { background: var(--editor); border: 1px solid var(--border); border-radius: 7px; padding: 12px 13px; display: flex; flex-direction: column; gap: 7px; }
+
+  /* controls row */
+  .controls { display: flex; justify-content: flex-end; margin-bottom: 10px; }
+  .search-btn { background: var(--btn-bg); color: #fff; border-radius: 4px; padding: 4px 12px; font-size: 13px; }
+
+  /* filter pills */
+  .filter-row { display: flex; gap: 4px; margin-bottom: 8px; flex-wrap: wrap; min-height: 0; }
+  .pill { font-family: var(--mono); font-size: 11px; padding: 1px 7px; border-radius: 8px; background: #0e4f86; color: #e6f2ff; }
+
+  /* meta row */
+  .meta { font-size: 12px; color: var(--dim); display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px; gap: 8px; }
+
+  /* results */
+  .cards { display: flex; flex-direction: column; gap: 8px; }
+  .card { background: var(--editor); border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; display: flex; flex-direction: column; gap: 5px; }
   .card.selected { border-color: #0078d4; box-shadow: 0 0 0 1px #0078d4; }
-  .card-header { display: flex; justify-content: space-between; font-size: 13px; }
+  .card-header { display: flex; justify-content: space-between; align-items: baseline; font-size: 11px; gap: 8px; }
   .filename { font-family: var(--mono); }
   .filename .dir { color: var(--dim); }
   .filename .base { color: #e5c07b; }
-  .lines { color: var(--dim); }
+  .lines { color: var(--dim); white-space: nowrap; }
   .symbol-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
-  .symbol { color: #c586c0; font-weight: 600; font-family: var(--mono); font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .tags { display: flex; gap: 6px; align-items: center; font-size: 12px; color: var(--dim); flex-shrink: 0; }
-  .tag { border: 1px solid #444; border-radius: 9px; padding: 0 7px; }
-  .tag.both { border-color: var(--green); color: #b6e3bf; }
-  .track { width: 38px; height: 5px; background: #3a3a3a; border-radius: 3px; overflow: hidden; }
-  .fill { height: 100%; }
-  .code { background: var(--code-bg); border-radius: 5px; padding: 8px 10px; font-family: var(--mono); font-size: 13px; line-height: 1.45; white-space: pre; overflow: hidden; max-height: calc(13px * 1.45 * 5 + 16px); color: #d4d4d4; }
+  .symbol { color: #c586c0; font-weight: 600; font-family: var(--mono); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tags { display: flex; gap: 5px; align-items: center; font-size: 10px; color: var(--dim); flex-shrink: 0; }
+  .tag { border: 1px solid #444; border-radius: 8px; padding: 0 5px; }
+  .code { background: var(--code-bg); border-radius: 4px; padding: 5px 8px; font-family: var(--mono); font-size: 12px; line-height: 1.35; white-space: pre; overflow: hidden; max-height: calc(12px * 1.35 * 4 + 10px); color: #d4d4d4; }
   mark { background: var(--mark); color: inherit; border-radius: 2px; }
-  .tk-k { color: #569cd6; } .tk-s { color: #ce9178; } .tk-n { color: #b5cea8; } .tk-c { color: #6a9955; font-style: italic; }
-  .tk-f { color: #dcdcaa; }
+  .tok-keyword { color: #569cd6; } .tok-string { color: #ce9178; } .tok-number { color: #b5cea8; } .tok-comment { color: #6a9955; font-style: italic; }
 
-  .empty { font-size: 14px; color: var(--dim); }
-  .empty h4 { font-size: 12px; letter-spacing: .08em; margin: 6px 0 8px; }
-  .chip { background: #3a3d41; color: #ddd; border-radius: 11px; padding: 8px 12px; margin-bottom: 8px; font-size: 14px; }
-  .syntax { font-size: 13px; width: 100%; border-collapse: collapse; }
-  .syntax td { padding: 3px 0; }
-  .syntax code { font-family: var(--mono); color: #ddd; }
+  /* card action buttons */
+  .card-actions { display: flex; gap: 6px; }
+  .ghost-btn { background: var(--btn2-bg); color: #ddd; border-radius: 4px; padding: 2px 7px; font-size: 11px; border: none; cursor: pointer; }
+
+  /* inline explain box inside a card */
+  .card-explain { border-left: 3px solid var(--accent); background: #1d2630; padding: 6px 8px; border-radius: 4px; font-size: 11px; line-height: 1.4; white-space: pre-wrap; margin-top: 2px; }
+  .card-explain.pending { color: var(--dim); font-style: italic; }
+  .card-explain.failed { border-left-color: var(--bad); }
+
+  /* empty state */
+  .empty { font-size: 12px; color: var(--dim); }
+  .empty h4 { font-size: 11px; letter-spacing: .07em; font-weight: 600; margin: 12px 0 6px; }
+  .chip { display: block; width: 100%; text-align: left; background: #3a3d41; color: #ddd; border-radius: 8px; padding: 6px 10px; margin-bottom: 5px; font-size: 12px; font-family: var(--mono); border: 1px solid transparent; cursor: pointer; }
+  .syntax { font-size: 11px; width: 100%; border-collapse: collapse; }
+  .syntax td { padding: 2px 0; vertical-align: top; }
+  .syntax code { font-family: var(--mono); color: #ddd; white-space: nowrap; padding-right: 8px; }
 
   /* ---------- editor ---------- */
   .editor { display: grid; grid-template-rows: 38px 1fr; min-width: 0; background: var(--editor); }
@@ -128,14 +144,13 @@
     <div class="main">
       <div class="activity"><div class="ico"></div><div class="ico active"></div><div class="ico"></div><div class="ico"></div></div>
       <div class="sidebar">
-        <div class="side-title">CODELENS: SEMANTIC SEARCH</div>
-        <div class="header">
-          <div class="header-left"><span class="status-dot"></span><strong>CodeLens</strong><span id="badge"></span></div>
+        <div class="hdr">
+          <div class="hdr-left"><span class="status-dot" id="status-dot" style="background:var(--green)"></span><strong>CodeLens</strong><span id="badge"></span></div>
           <span class="link">Re-index</span>
         </div>
         <div class="search-input" id="input"></div>
-        <div class="controls"><span><span class="chk"></span>Explain</span><span class="btn">Search ↵</span></div>
-        <div class="filters" id="filters"></div>
+        <div class="controls"><span class="search-btn">Search</span></div>
+        <div class="filter-row" id="filters"></div>
         <div class="meta" id="meta"></div>
         <div id="results"></div>
       </div>
@@ -145,7 +160,7 @@
       </div>
     </div>
     <div class="statusbar">
-      <span>⎇ main</span><span id="status-chunks">$(database) CodeLens</span>
+      <span>⎇ main</span><span id="status-chunks">CodeLens</span>
       <span class="right">● offline · local Ollama · sqlite-vec</span>
     </div>
   </div>
@@ -180,7 +195,7 @@ const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<'
 
 const KEYWORDS = new Set(('function def class struct impl import from export if else elif for while return const let var await ' +
   'async type interface public private protected static fn pub new self this try except catch finally raise throw with ' +
-  'None null true false True False in not and or').split(' '));
+  'None null true false True False in not and or __global__ __device__ __host__ __shared__').split(' '));
 const HASH = new Set(['python', 'yaml', 'toml', 'text']);
 function splitIdent(w) {
   return w.replace(/\$/g, '_').split('_').flatMap(p => p.match(/[A-Z]+(?=[A-Z][a-z])|[A-Z]?[a-z]+|[A-Z]+|\d+/g) || []).map(s => s.toLowerCase());
@@ -194,27 +209,25 @@ function highlight(code, lang, terms = []) {
     out += esc(code.slice(last, m.index));
     const tok = m[0], c = tok[0];
     let h;
-    if (tok.startsWith('//') || tok.startsWith('/*') || (c === '#' && HASH.has(lang))) h = `<span class="tk-c">${esc(tok)}</span>`;
-    else if (c === '"' || c === "'" || c === '`') h = `<span class="tk-s">${esc(tok)}</span>`;
-    else if (/\d/.test(c)) h = `<span class="tk-n">${esc(tok)}</span>`;
+    if (tok.startsWith('//') || tok.startsWith('/*') || (c === '#' && HASH.has(lang))) h = `<span class="tok-comment">${esc(tok)}</span>`;
+    else if (c === '"' || c === "'" || c === '`') h = `<span class="tok-string">${esc(tok)}</span>`;
+    else if (/\d/.test(c)) h = `<span class="tok-number">${esc(tok)}</span>`;
     else {
       const next = code[m.index + tok.length];
-      h = KEYWORDS.has(tok) ? `<span class="tk-k">${esc(tok)}</span>` : next === '(' ? `<span class="tk-f">${esc(tok)}</span>` : esc(tok);
+      h = KEYWORDS.has(tok) ? `<span class="tok-keyword">${esc(tok)}</span>` : next === '(' ? `<span class="tok-f">${esc(tok)}</span>` : esc(tok);
       if (termSet.size && (termSet.has(tok.toLowerCase()) || splitIdent(tok).some(p => termSet.has(p)))) h = `<mark>${h}</mark>`;
     }
     out += h; last = m.index + tok.length;
   }
   return out + esc(code.slice(last));
 }
-const scoreColor = v => v > 0.75 ? 'var(--green)' : v > 0.55 ? 'var(--amber)' : 'var(--red)';
 
 // ------------------------------------------------------------------ script
-// Per-character typing times with a little deterministic rhythm
 function typingPlan(text, start, cps = 13) {
   const times = [];
   let t = start;
   for (let i = 0; i < text.length; i++) {
-    const jitter = ((i * 7919) % 13) / 13;            // 0..1, deterministic
+    const jitter = ((i * 7919) % 13) / 13;
     t += (1 / cps) * (0.7 + 0.6 * jitter) + (text[i] === ' ' ? 0.05 : 0);
     times.push(t);
   }
@@ -222,34 +235,54 @@ function typingPlan(text, start, cps = 13) {
 }
 
 const Q = DATA.queries;
+const SUGGEST = DATA.suggestions || {};
+const EXPLAIN = DATA.explain || {};
+
+// Scene timing (total 30 s):
+//  0–3    intro
+//  3–10.5 semantic search + open file
+//  10.5–17.5 filters scene
+//  17.5–22  exact/keyword
+//  22–27.5  explain scene
+//  27.5–30  outro
 const SCENES = [
-  { key: 'semantic', from: 3.0, to: 13.2, typeAt: 3.9, cps: 14,
+  { key: 'semantic', from: 3.0, to: 10.5, typeAt: 3.9, cps: 14,
     title: 'Ask in plain English', sub: 'Semantic search finds code by what it does',
-    downAt: 8.4, enterAt: 9.2, open: 'extension/src/searchPanel.ts' },
-  { key: 'filters', from: 13.2, to: 20.2, typeAt: 13.6, cps: 15,
+    downAt: 7.8, enterAt: 8.5, open: 'extension/src/searchPanel.ts' },
+  { key: 'filters', from: 10.5, to: 17.5, typeAt: 11.0, cps: 15,
     title: 'Narrow it down with filters', sub: 'in:  -in:  lang:  kind:  — results update as you type' },
-  { key: 'exact', from: 20.2, to: 25.0, typeAt: 20.5, cps: 11,
+  { key: 'exact', from: 17.5, to: 22.0, typeAt: 17.9, cps: 11,
     title: 'Or just type the name', sub: 'Keyword search merged with meaning: exact names always win',
-    downAt: 22.6, enterAt: 23.2, open: 'backend/query.py' },
+    downAt: 20.2, enterAt: 20.8, open: 'backend/query.py' },
 ];
 for (const s of SCENES) {
   s.query = Q[s.key].query;
   s.times = typingPlan(s.query, s.typeAt, s.cps);
   s.typedEnd = s.times[s.times.length - 1];
-  // A live search fires once a step's text is typed (plus the 250 ms debounce)
   s.steps = Object.entries(Q[s.key].steps).map(([text, res]) => {
     const idx = text.length - 1;
     return { text, res, at: (s.times[idx] ?? s.typedEnd) + 0.3 };
   }).sort((a, b) => a.at - b.at);
 }
 
+// Explain scene constants
+const EX_FROM = 22.0, EX_TO = 27.5;
+const EX_CLICK_AT = 22.8;   // when the "Explain" button is clicked
+const EX_SHOW_AT  = 23.3;   // when the explanation text appears
+const EX_TEXT   = EXPLAIN.text   || 'Explain unavailable — Ollama is not running (ollama pull mistral).';
+
 function sceneAt(t) { return SCENES.find(s => t >= s.from && t < s.to) || null; }
 
-// ------------------------------------------------------------------ rendering (cached per state)
+// ------------------------------------------------------------------ rendering
 let lastResultsKey = null, lastEditorKey = null, lastFiltersKey = null;
 
 function renderInput(scene, t) {
   const el = $('input');
+  // During explain scene, show the last semantic query (frozen)
+  if (t >= EX_FROM && t < EX_TO) {
+    el.innerHTML = esc(Q.semantic.query);
+    return;
+  }
   if (!scene) { el.innerHTML = '<span class="placeholder">Ask anything, or type a symbol name</span>'; return; }
   const n = scene.times.filter(x => x <= t).length;
   const text = scene.query.slice(0, n);
@@ -259,34 +292,66 @@ function renderInput(scene, t) {
 }
 
 function emptyState() {
-  return `<div class="empty">
-    <h4>TRY</h4>
-    <div class="chip">where do we handle authentication?</div>
-    <div class="chip">database writes -in:tests</div>
-    <h4 style="margin-top:14px">FILTERS</h4>
+  const chips = (SUGGEST.suggestions || []).slice(0, 3);
+  const chipHtml = chips.length
+    ? `<h4>TRY A SEARCH FROM THIS REPO</h4>${chips.map(c => `<div class="chip">${esc(c)}</div>`).join('')}`
+    : '';
+  return `<div class="empty">${chipHtml}
+    <h4>FILTERS</h4>
     <table class="syntax">
       <tr><td><code>in:api</code></td><td>inside a folder or file</td></tr>
       <tr><td><code>-in:tests</code></td><td>exclude a folder</td></tr>
-      <tr><td><code>lang:py</code></td><td>py, ts, js, go, rs, java, cpp</td></tr>
-      <tr><td><code>kind:class</code></td><td>function, method, class, type</td></tr>
+      <tr><td><code>lang:py</code></td><td>py, ts, js, go, rs, java, cpp, cuda, md</td></tr>
+      <tr><td><code>kind:class</code></td><td>function, method, class, type, interface, text</td></tr>
     </table></div>`;
 }
 
-function cardHtml(r, terms, selected) {
+function cardHtml(r, terms, selected, explainVisible, explainPending) {
   const slash = r.file_path.lastIndexOf('/');
   const dir = slash >= 0 ? r.file_path.slice(0, slash + 1) : '';
   const base = r.file_path.slice(slash + 1);
-  const code = r.chunk_text.split('\n').slice(0, 5).join('\n');
-  const bar = r.score == null ? '' : `<div class="track"><div class="fill" style="width:${Math.round(r.score * 100)}%;background:${scoreColor(r.score)}"></div></div>${r.score.toFixed(2)}`;
+  const code = r.chunk_text.split('\n').slice(0, 4).join('\n');
+  let explainHtml = '';
+  if (explainVisible) {
+    const cls = explainPending ? 'pending' : '';
+    const body = explainPending ? 'Explaining with the local model…' : EX_TEXT;
+    explainHtml = `<div class="card-explain ${cls}">${esc(body)}</div>`;
+  }
   return `<div class="card ${selected ? 'selected' : ''}">
     <div class="card-header"><span class="filename"><span class="dir">${esc(dir)}</span><span class="base">${esc(base)}</span></span>
       <span class="lines">${r.line_start}–${r.line_end}</span></div>
     <div class="symbol-row"><span class="symbol">${esc(r.symbol_name)}</span>
-      <span class="tags"><span class="tag">${esc(r.kind)}</span><span class="tag ${r.match === 'both' ? 'both' : ''}">${esc(r.match)}</span>${bar}</span></div>
-    <div class="code">${highlight(code, r.language, terms)}</div></div>`;
+      <span class="tags"><span class="tag">${esc(r.kind)}</span></span></div>
+    <div class="code">${highlight(code, r.language, terms)}</div>
+    <div class="card-actions">
+      <span class="ghost-btn">Open</span>
+      <span class="ghost-btn" style="${explainVisible ? 'background:#1d4f7a;color:#7cc4fa' : ''}">Explain</span>
+      <span class="ghost-btn">Copy code</span>
+    </div>
+    ${explainHtml}</div>`;
 }
 
 function renderResults(scene, t) {
+  // During explain scene: freeze semantic final results with explain on card 0
+  if (t >= EX_FROM && t < EX_TO) {
+    const semanticFinal = Q.semantic.steps[Q.semantic.query];
+    const key = `explain|${t >= EX_SHOW_AT ? 'shown' : 'pending'}`;
+    if (key !== lastResultsKey) {
+      lastResultsKey = key;
+      const res = semanticFinal;
+      const terms = res.terms || [];
+      const explainVisible = t >= EX_CLICK_AT;
+      const explainPending = explainVisible && t < EX_SHOW_AT;
+      $('meta').innerHTML = `<span>${res.results.length} results, best first (${res.query_ms} ms)</span><span class="link">Explain results</span>`;
+      $('results').innerHTML = `<div class="cards">${res.results.slice(0, 3).map((r, i) =>
+        cardHtml(r, terms, i === 0, i === 0 && explainVisible, i === 0 && explainPending)
+      ).join('')}</div>`;
+      $('results').dataset.since = EX_FROM;
+    }
+    $('results').style.opacity = 1;
+    return;
+  }
+
   let step = null;
   if (scene) for (const s of scene.steps) if (s.at <= t) step = s;
   const selected = scene && scene.downAt && t >= scene.downAt ? 0 : -1;
@@ -298,12 +363,13 @@ function renderResults(scene, t) {
       $('meta').innerHTML = '';
     } else {
       const res = step.res;
-      $('meta').innerHTML = `<span>${res.results.length} results · ${res.query_ms}ms</span><span><kbd>↑</kbd><kbd>↓</kbd> <kbd>↵</kbd> open</span>`;
-      $('results').innerHTML = `<div class="cards">${res.results.slice(0, 4).map((r, i) => cardHtml(r, res.terms || [], i === selected)).join('')}</div>`;
+      $('meta').innerHTML = `<span>${res.results.length} results, best first (${res.query_ms} ms)</span><span class="link">Explain results</span>`;
+      $('results').innerHTML = `<div class="cards">${res.results.slice(0, 4).map((r, i) =>
+        cardHtml(r, res.terms || [], i === selected, false, false)
+      ).join('')}</div>`;
       $('results').dataset.since = step.at;
     }
   }
-  // brief fade when results change
   const since = Number($('results').dataset.since || 0);
   $('results').style.opacity = step ? 0.55 + 0.45 * ramp(t, since, since + 0.18) : 1;
 
@@ -319,13 +385,18 @@ function renderResults(scene, t) {
   if (fk !== lastFiltersKey) {
     lastFiltersKey = fk;
     $('filters').innerHTML = pills.map(p => `<span class="pill">${esc(p)}</span>`).join('');
-    $('filters').style.marginBottom = pills.length ? '10px' : '0';
+    $('filters').style.marginBottom = pills.length ? '8px' : '0';
   }
 }
 
 function openFileAt(t) {
   let open = null;
   for (const s of SCENES) if (s.open && t >= s.enterAt) open = s;
+  // In explain scene: keep the last opened file (semantic's)
+  if (t >= EX_FROM) {
+    const sem = SCENES.find(s => s.key === 'semantic');
+    if (sem && sem.open) open = sem;
+  }
   return open;
 }
 
@@ -337,7 +408,7 @@ function renderEditor(t) {
     lastEditorKey = key;
     const tabs = ['extension/src/extension.ts'];
     if (scene) tabs.push(scene.open);
-    $('tabs').innerHTML = tabs.map(p => `<div class="tab ${p === key ? 'active' : ''}">${esc(p.split('/').pop())}</div>`).join('') ;
+    $('tabs').innerHTML = tabs.map(p => `<div class="tab ${p === key ? 'active' : ''}">${esc(p.split('/').pop())}</div>`).join('');
     if (!scene) {
       $('tabs').innerHTML = '';
       $('code').innerHTML = '<div class="welcome"><div class="big">CodeLens</div><div class="small">Search with the sidebar. Results open here.</div></div>';
@@ -353,15 +424,28 @@ function renderEditor(t) {
       $('code').innerHTML = html.join('');
     }
   }
-  if (scene) {
-    // highlight flash like the extension's decoration: fades out after ~1.4 s
-    const flash = 0.95 * (1 - ramp(t, scene.enterAt + 0.8, scene.enterAt + 2.4));
+  // highlight flash
+  const flashScene = t >= EX_FROM ? SCENES.find(s => s.key === 'semantic') : scene;
+  if (flashScene && flashScene.enterAt) {
+    const flash = t >= EX_FROM
+      ? 0  // faded out in explain scene
+      : 0.95 * (1 - ramp(t, flashScene.enterAt + 0.8, flashScene.enterAt + 2.4));
     $('code').style.setProperty('--flash', flash.toFixed(3));
   }
 }
 
 function renderKey(t) {
   const el = $('key');
+  // Show "Explain" click bubble at EX_CLICK_AT
+  if (t >= EX_CLICK_AT - 0.05 && t < EX_CLICK_AT + 0.7) {
+    el.textContent = 'Explain';
+    el.style.left = '320px';
+    el.style.top = '445px';
+    const k = ramp(t, EX_CLICK_AT - 0.05, EX_CLICK_AT + 0.1);
+    el.style.opacity = Math.min(k, 1 - ramp(t, EX_CLICK_AT + 0.4, EX_CLICK_AT + 0.7));
+    el.style.transform = `scale(${0.85 + 0.15 * k})`;
+    return;
+  }
   let label = null, at = 0;
   for (const s of SCENES) {
     if (s.downAt && t >= s.downAt - 0.05 && t < s.downAt + 0.55) { label = '↓'; at = s.downAt; }
@@ -377,6 +461,15 @@ function renderKey(t) {
 }
 
 function renderHeadline(t) {
+  // Custom headline for explain scene
+  if (t >= EX_FROM && t < EX_TO) {
+    const h = $('headline');
+    h.querySelector('h1').textContent = 'Explain any result';
+    h.querySelector('p').textContent = 'Click Explain on a result — no extra search needed';
+    h.style.opacity = pulse(t, EX_FROM, EX_TO, 0.35);
+    h.style.transform = `translateY(${(1 - ramp(t, EX_FROM, EX_FROM + 0.5)) * 14}px)`;
+    return;
+  }
   const scene = sceneAt(t);
   const h = $('headline');
   if (!scene) { h.style.opacity = 0; return; }
@@ -399,17 +492,17 @@ function renderStats() {
 
 window.renderAt = function (t) {
   const scene = sceneAt(t);
-  // intro 0–3 s, window 3–25 s, outro 25–30 s
+  // intro 0–3 s, window 3–27.5 s, outro 27.5–30 s
   const intro = 1 - ramp(t, 2.4, 3.0);
   $('intro').style.opacity = intro;
   $('intro').style.transform = `scale(${1 + 0.04 * ramp(t, 0, 3)})`;
 
-  const winIn = ramp(t, 2.8, 3.5), winOut = ramp(t, 24.6, 25.3);
+  const winIn = ramp(t, 2.8, 3.5), winOut = ramp(t, 27.0, 27.8);
   $('win').style.opacity = Math.min(winIn, 1 - winOut);
   $('win').style.transform = `translateY(${(1 - winIn) * 40}px) scale(${1 - 0.04 * winOut})`;
 
-  $('outro').style.opacity = ramp(t, 25.1, 25.9);
-  $('outro').style.transform = `translateY(${(1 - ramp(t, 25.1, 26.0)) * 20}px)`;
+  $('outro').style.opacity = ramp(t, 27.6, 28.4);
+  $('outro').style.transform = `translateY(${(1 - ramp(t, 27.6, 28.5)) * 20}px)`;
 
   $('badge').textContent = `${DATA.index.total_chunks} chunks`;
   $('status-chunks').textContent = `CodeLens: ${DATA.index.total_chunks} chunks · watching`;
